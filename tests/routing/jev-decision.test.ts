@@ -643,14 +643,19 @@ describe("JEV configurable decision provider", () => {
     expect(Object.values(criteria).every(value => typeof value === "object" && value !== null)).toBeTrue();
   });
 
-  test("a canonical jev row may override the decision model but not the destination", async () => {
+  test("a canonical jev row's defaultModel and models never change the TypeSafe request", async () => {
     const calls: Call[] = [];
-    const config = jevConfig("typesafe-row-secret");
-    config.providers.jev!.defaultModel = "  jev-2026-09  ";
-    await resolveJevDecision({ body: decisionBody, candidates, fallback, config, post: recordingPost(calls) });
+    const plain = jevConfig("typesafe-row-secret");
+    const decorated = jevConfig("typesafe-row-secret");
+    decorated.providers.jev!.defaultModel = "jev-2026-09";
+    decorated.providers.jev!.models = ["jev-other"];
+    for (const config of [plain, decorated]) {
+      await resolveJevDecision({ body: decisionBody, candidates, fallback, config, post: recordingPost(calls) });
+    }
 
-    expect(calls[0]!.url).toBe(JEV_API_URL);
-    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("jev-2026-09");
+    expect(calls.map(call => call.url)).toEqual([JEV_API_URL, JEV_API_URL]);
+    expect(JSON.parse(String(calls[1]!.init.body)).model).toBe(JEV_MODEL);
+    expect(calls[1]!.init.body).toBe(calls[0]!.init.body);
   });
 
   test("a retargeted jev row stays pinned to TypeSafe and never receives a credential", async () => {
@@ -711,15 +716,110 @@ describe("JEV configurable decision provider", () => {
     });
   });
 
-  test("a self-hosted row falls back from defaultModel to models[0] to the JEV model", async () => {
+  test("a self-hosted row uses models[0] after defaultModel and is unusable without either", async () => {
     const calls: Call[] = [];
     const post = recordingPost(calls);
-    const withModels = selfHosted({ defaultModel: undefined, models: ["tev1:0.8b", "tev1:4b"] });
-    const bare = selfHosted({ defaultModel: undefined });
-    for (const config of [withModels, bare]) {
-      await resolveJevDecision({ body: decisionBody, candidates, fallback, config, decisionProvider: "ollama-tev1", post });
+    await resolveJevDecision({
+      body: decisionBody,
+      candidates,
+      fallback,
+      config: selfHosted({ defaultModel: undefined, models: ["tev1:0.8b", "tev1:4b"] }),
+      decisionProvider: "ollama-tev1",
+      post,
+    });
+    expect(calls.map(call => JSON.parse(String(call.init.body)).model)).toEqual(["tev1:0.8b"]);
+
+    // TypeSafe's `jev-latest` is never sent to a self-hosted host.
+    for (const bare of [selfHosted({ defaultModel: undefined }), selfHosted({ defaultModel: "  ", models: [] })]) {
+      expect(await resolveJevDecision({
+        body: decisionBody, candidates, fallback, config: bare, decisionProvider: "ollama-tev1", post,
+      })).toMatchObject({ ...fallback, gate: "missing_key" });
     }
-    expect(calls.map(call => JSON.parse(String(call.init.body)).model)).toEqual(["tev1:0.8b", JEV_MODEL]);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a self-hosted endpoint must be a /systemone path", async () => {
+    const calls: Call[] = [];
+    const post = recordingPost(calls);
+    for (const baseUrl of ["http://127.0.0.1:11434/v1", "http://127.0.0.1:11434/v1/systemone-proxy", "not a url"]) {
+      expect(await resolveJevDecision({
+        body: decisionBody, candidates, fallback, config: selfHosted({ baseUrl }), decisionProvider: "ollama-tev1", post,
+      })).toMatchObject({ ...fallback, gate: "missing_key" });
+    }
+    expect(calls).toHaveLength(0);
+    await resolveJevDecision({
+      body: decisionBody,
+      candidates,
+      fallback,
+      config: selfHosted({ baseUrl: "https://decider.example/api/v1/systemone//" }),
+      decisionProvider: "ollama-tev1",
+      post,
+    });
+    expect(calls.map(call => call.url)).toEqual(["https://decider.example/api/v1/systemone"]);
+  });
+
+  test("a self-hosted row refuses TypeSafe environment references and foreign keychain entries", async () => {
+    await withEnvKeys(async () => {
+      const calls: Call[] = [];
+      const post = recordingPost(calls);
+      for (const apiKey of ["${TYPESAFE_API_KEY}", "$TYPESAFE_API_KEY", "${JEV_API_KEY}", "$JEV_API_KEY", "keychain:jev"]) {
+        expect(await resolveJevDecision({
+          body: decisionBody, candidates, fallback, config: selfHosted({ apiKey }), decisionProvider: "ollama-tev1", post,
+        })).toMatchObject({ ...fallback, gate: "missing_key" });
+      }
+      expect(calls).toHaveLength(0);
+
+      const previousOwn = process.env.OLLAMA_TEV1_KEY;
+      process.env.OLLAMA_TEV1_KEY = "own-env-secret";
+      try {
+        await resolveJevDecision({
+          body: decisionBody,
+          candidates,
+          fallback,
+          config: selfHosted({ apiKey: "${OLLAMA_TEV1_KEY}" }),
+          decisionProvider: "ollama-tev1",
+          post,
+        });
+      } finally {
+        if (previousOwn === undefined) delete process.env.OLLAMA_TEV1_KEY;
+        else process.env.OLLAMA_TEV1_KEY = previousOwn;
+      }
+      expect(new Headers(calls[0]!.init.headers).get("authorization")).toBe("Bearer own-env-secret");
+    });
+  });
+
+  test("self-hosted option counts outside 2..26 fail open without a request", async () => {
+    const calls: Call[] = [];
+    const post = recordingPost(calls);
+    const single: JevCandidate[] = [{ ...candidates[1]!, reasoningEfforts: ["low"] }];
+    const many: JevCandidate[] = Array.from({ length: 9 }, (_, index) => ({
+      key: `p/m-${index}`,
+      provider: "p",
+      model: `m-${index}`,
+      reasoningEfforts: ["low", "medium", "high"],
+    }));
+    const edge = many.slice(0, 8).concat([{ ...many[8]!, reasoningEfforts: ["low", "medium"] }]);
+    const manyFallback = { targetKey: many[0]!.key, effort: "low" as const };
+    const singleFallback = { targetKey: single[0]!.key, effort: "low" as const };
+
+    expect(await resolveJevDecision({
+      body: decisionBody, candidates: single, fallback: singleFallback, config: selfHosted(), decisionProvider: "ollama-tev1", post,
+    })).toMatchObject({ ...singleFallback, gate: "no_choices" });
+    expect(await resolveJevDecision({
+      body: decisionBody, candidates: many, fallback: manyFallback, config: selfHosted(), decisionProvider: "ollama-tev1", post,
+    })).toMatchObject({ ...manyFallback, gate: "invalid" });
+    expect(calls).toHaveLength(0);
+
+    // 26 options is the ceiling and still goes out; the canonical service keeps no local count limit.
+    await resolveJevDecision({
+      body: decisionBody, candidates: edge, fallback: manyFallback, config: selfHosted(), decisionProvider: "ollama-tev1", post,
+    });
+    await resolveJevDecision({ body: decisionBody, candidates: single, fallback: singleFallback, config: jevConfig("secret"), post });
+    await resolveJevDecision({ body: decisionBody, candidates: many, fallback: manyFallback, config: jevConfig("secret"), post });
+    expect(calls.map(call => call.url)).toEqual(["http://127.0.0.1:11434/v1/systemone", JEV_API_URL, JEV_API_URL]);
+    expect(Object.keys((JSON.parse(String(calls[0]!.init.body)) as {
+      questions: { route: { criteria: object } };
+    }).questions.route.criteria)).toHaveLength(26);
   });
 
   test("a self-hosted row sends only its own key and never a TypeSafe credential", async () => {
@@ -839,6 +939,11 @@ describe("JEV configurable decision provider", () => {
     expect(await probeJevDecisionProvider(selfHosted(), "ollama-tev1", {
       post: recordingPost(calls, () => new Response("down", { status: 500 })),
     })).toMatchObject({ ok: false, error: "JEV decision service probe failed (http)" });
+    const probed = calls.length;
+    expect(await probeJevDecisionProvider(selfHosted({ disabled: true }), "ollama-tev1", {
+      post: recordingPost(calls),
+    })).toMatchObject({ ok: false, error: "JEV decision service is disabled or not configured" });
+    expect(calls).toHaveLength(probed);
     expect(await probeJevDecisionProvider(jevConfig("secret"), "jev", {
       post: recordingPost(calls, () => new Response("down", { status: 500 })),
     })).toMatchObject({ ok: false, error: "TypeSafe JEV decision probe failed (http)" });

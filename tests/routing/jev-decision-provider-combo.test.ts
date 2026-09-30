@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { comboConfigIssues, getCombo } from "../../src/combos";
-import { getConfigPath, readConfigDiagnostics, saveConfig } from "../../src/config";
+import { getConfigPath, loadConfig, readConfigDiagnostics, saveConfig } from "../../src/config";
+import { providerEditorConfigDTO } from "../../src/server/auth-cors";
 import { handleManagementAPI } from "../../src/server/management-api";
 import type { OcxConfig, OcxProviderConfig } from "../../src/types";
 import { catalogConvergenceFactory } from "../helpers/catalog-convergence";
@@ -81,9 +82,12 @@ describe("JEV decisionProvider combo validation", () => {
     expect(issuesFor({ strategy: "jev", decisionProvider: "a" }, rows)).toEqual([
       { path: ["decisionProvider"], message: 'decisionProvider "a" is not a decision service (adapter must be "jev-decision")' },
     ]);
-    // A configured `jev` row that is not a decision service is refused like any other row.
-    expect(issuesFor({ strategy: "jev", decisionProvider: "jev" }, rows)).toEqual([
-      { path: ["decisionProvider"], message: 'decisionProvider "jev" is not a decision service (adapter must be "jev-decision")' },
+    // Explicit "jev" means exactly what omission means, whatever row happens to be named `jev`.
+    expect(issuesFor({ strategy: "jev", decisionProvider: "jev" }, rows)).toEqual([]);
+    expect(issuesFor({ strategy: "jev" }, rows)).toEqual([]);
+    rows.local = { adapter: "jev-decision", baseUrl: "http://127.0.0.1:11434/v1", allowPrivateNetwork: true };
+    expect(issuesFor({ strategy: "jev", decisionProvider: "local" }, rows)).toEqual([
+      { path: ["decisionProvider"], message: 'decisionProvider "local" baseUrl must be the full decision endpoint ending in /systemone' },
     ]);
     expect(issuesFor({ strategy: "failover", decisionProvider: "ollama-tev1" }, rows)).toEqual([
       { path: ["decisionProvider"], message: 'decisionProvider is only valid with strategy "jev"' },
@@ -113,10 +117,12 @@ describe("JEV decisionProvider combo validation", () => {
     const cfg = config({
       auto: { strategy: "jev", targets, decisionProvider: "  ollama-tev1 ", decisionTimeoutMs: 30_000 },
       plain: { strategy: "jev", targets },
+      explicit: { strategy: "jev", targets, decisionProvider: " jev " },
     });
     expect(getCombo(cfg, "auto")).toMatchObject({ decisionProvider: "ollama-tev1", decisionTimeoutMs: 30_000 });
     expect(getCombo(cfg, "plain")).not.toHaveProperty("decisionProvider");
     expect(getCombo(cfg, "plain")).not.toHaveProperty("decisionTimeoutMs");
+    expect(getCombo(cfg, "explicit")).toEqual(getCombo(cfg, "plain"));
   });
 
   test("config-file load reports an invalid decisionProvider at its combo path", async () => {
@@ -207,5 +213,48 @@ describe("JEV decisionProvider management round-trip", () => {
       expect(canonical.status).toBe(200);
       expect(cfg.providers.jev).toBeUndefined();
     });
+  });
+
+  test("the provider-editor batch save refuses to drop a decision provider a combo names", async () => {
+    await withTempHome(async () => {
+      saveConfig(config({ custom: { strategy: "jev", targets, decisionProvider: "ollama-tev1" } }));
+      const cfg = loadConfig();
+      const before = readFileSync(getConfigPath(), "utf8");
+      const baseline = providerEditorConfigDTO(cfg);
+      const next = structuredClone(baseline);
+      delete next.providers["ollama-tev1"];
+
+      const blocked = await api(cfg, "PUT", "/api/providers", { baseline, next });
+      expect(blocked.status).toBe(409);
+      expect(await blocked.json()).toMatchObject({ code: "provider_has_dependent_combos" });
+      expect(readFileSync(getConfigPath(), "utf8")).toBe(before);
+    });
+  });
+
+  test("a retargeted jev row is not probed, so its stored key is never sent", async () => {
+    const seen: string[] = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        seen.push(`${request.method} ${new URL(request.url).pathname} ${request.headers.get("authorization")}`);
+        return Response.json({ data: [] });
+      },
+    });
+    try {
+      const cfg = config();
+      cfg.providers.jev = {
+        adapter: "jev-decision",
+        baseUrl: `http://127.0.0.1:${server.port}/v1/systemone`,
+        allowPrivateNetwork: true,
+        authMode: "key",
+        apiKey: "stored-typesafe-secret",
+      };
+      const response = await api(cfg, "POST", "/api/providers/test?name=jev");
+      expect(await response.json()).toEqual({ applicable: false, reason: "retargeted_decision_service", latencyMs: 0 });
+      expect(seen).toEqual([]);
+    } finally {
+      server.stop(true);
+    }
   });
 });

@@ -1617,9 +1617,12 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
         message: "Passthrough provider is configured (forwards your Codex login; no upstream /models).",
       });
     }
-    // Any decision-service row answers through the bounded JEV client. A retargeted `jev` row is
-    // not a decision destination (its credential stays pinned to TypeSafe), so it keeps the generic path.
-    if (prov.adapter === "jev-decision" && (name !== "jev" || providerMatchesRegistryTransport(name, prov))) {
+    // Decision services answer through the bounded JEV client. A retargeted `jev` row is neither
+    // TypeSafe nor a self-hosted service, so it is not probed at all: its key stays unsent.
+    if (prov.adapter === "jev-decision") {
+      if (name === "jev" && !providerMatchesRegistryTransport(name, prov)) {
+        return jsonResponse({ applicable: false, reason: "retargeted_decision_service", latencyMs: 0 });
+      }
       return jsonResponse(await probeJevDecisionProvider(config, name, { signal: req.signal }));
     }
     if (prov.liveModels === false) {

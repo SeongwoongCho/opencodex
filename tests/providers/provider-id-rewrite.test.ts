@@ -62,6 +62,22 @@ test("re-points combo targets so the migrated config still validates", () => {
   expect(comboConfigError("fast", config.combos!.fast!, providers)).toBeNull();
 });
 
+test("re-points a JEV combo decisionProvider so the migrated config still validates", () => {
+  const providers = {
+    model: { adapter: "openai-chat" },
+    [TO]: { adapter: "jev-decision", baseUrl: "http://127.0.0.1:11434/v1/systemone" },
+  } as unknown as Record<string, OcxProviderConfig>;
+  const combo = { strategy: "jev", decisionProvider: FROM, targets: [{ provider: "model", model: "m" }] };
+  const untouched = { strategy: "jev", decisionProvider: "jev", targets: [{ provider: "model", model: "m" }] };
+  const config = { providers, combos: { local: combo, canonical: untouched } } as unknown as OcxConfig;
+
+  expect(comboConfigError("local", combo, providers)).toContain("not configured");
+  expect(rewriteProviderReferences(config, FROM, TO).changed).toBe(1);
+  expect(config.combos!.local!.decisionProvider).toBe(TO);
+  expect(config.combos!.canonical!.decisionProvider).toBe("jev");
+  expect(comboConfigError("local", config.combos!.local!, providers)).toBeNull();
+});
+
 test("re-points routingProfiles candidates, a bare provider id like combo targets", () => {
   // candidates[].provider is validated against configured providers
   // (src/routing/profile.ts), so a stale id is the same load-failing dangling

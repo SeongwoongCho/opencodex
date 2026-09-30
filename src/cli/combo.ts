@@ -1,3 +1,4 @@
+import { JEV_DECISION_TIMEOUT_MAX_MS, JEV_DECISION_TIMEOUT_MIN_MS } from "../combos/types";
 import {
   CliUsageError,
   printData,
@@ -18,7 +19,7 @@ const USAGE = `Usage:
       [--effort <low|medium|high|xhigh|max|ultra|->] [--effort-mode <fallback|force>]
       (force overrides valid client effort and can increase cost/latency) [--alias <name|->]
       [--native-alias] [--display-name <label|->]
-      [--decision-provider <provider|->] [--decision-timeout <1000-120000 ms|->]
+      [--decision-provider <provider|->] [--decision-timeout <ms|->]
       (jev only; the provider must be a configured jev-decision row)
       [--rename-from <id>] [--json]
   ocx combo remove <id> --yes [--json]`;
@@ -99,8 +100,13 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (decisionTimeout !== undefined) {
     decisionTimeoutMs = decisionTimeout === "-" ? null : Number(decisionTimeout);
     if (decisionTimeoutMs !== null
-      && (!Number.isInteger(decisionTimeoutMs) || decisionTimeoutMs < 1_000 || decisionTimeoutMs > 120_000)) {
-      throw new CliUsageError("--decision-timeout must be an integer from 1000 to 120000, or -", USAGE);
+      && (!Number.isInteger(decisionTimeoutMs)
+        || decisionTimeoutMs < JEV_DECISION_TIMEOUT_MIN_MS
+        || decisionTimeoutMs > JEV_DECISION_TIMEOUT_MAX_MS)) {
+      throw new CliUsageError(
+        `--decision-timeout must be an integer from ${JEV_DECISION_TIMEOUT_MIN_MS} to ${JEV_DECISION_TIMEOUT_MAX_MS}, or -`,
+        USAGE,
+      );
     }
     if (decisionTimeoutMs !== null && strategy !== "jev") {
       throw new CliUsageError("--decision-timeout applies only to the jev strategy", USAGE);

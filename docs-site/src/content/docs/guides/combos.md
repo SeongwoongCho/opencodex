@@ -305,22 +305,29 @@ Combo's `decisionProvider`:
 }
 ```
 
-- The decision model is `defaultModel`, else the first `models` entry, else `jev-latest`. The row is
-  a decision service only: it is never published as a routable model and cannot be a Combo target.
-- A loopback or LAN endpoint needs `allowPrivateNetwork: true` on that row, exactly like any other
-  local provider. Plain `http:` is accepted only for such a local literal address; every other
-  destination must use HTTPS. Redirects still fail open.
+- The row's `baseUrl` must be the full decision endpoint and its path must end in `/systemone`.
+  The decision model is `defaultModel`, else the first `models` entry; a row with neither is
+  treated as unusable and fails open without a request (`jev-latest` is TypeSafe's model and is
+  never sent to a self-hosted host). The row is a decision service only: it is never published as a
+  routable model and cannot be a Combo target.
+- A loopback or LAN endpoint needs `allowPrivateNetwork: true` set explicitly on that row. Plain
+  `http:` is accepted only when the host is exactly `localhost` or a loopback, RFC 1918, or IPv6 ULA
+  address literal, every resolved address stays in that set, and no outbound proxy applies (add the
+  host to `NO_PROXY`). Every other destination must use HTTPS. Redirects still fail open.
 - Only the row's own `apiKey` is sent, and only when it is set; a keyless row sends no
-  `Authorization` header. `TYPESAFE_API_KEY`, `JEV_API_KEY`, and the `jev` row's key are never sent to
-  a self-hosted endpoint. The `jev` id itself always means the TypeSafe endpoint.
+  `Authorization` header. A row whose `apiKey` references `${TYPESAFE_API_KEY}`/`${JEV_API_KEY}` or
+  another provider's keychain entry is refused as unusable, so `TYPESAFE_API_KEY`, `JEV_API_KEY`, and
+  the `jev` row's key are never sent to a self-hosted endpoint. The `jev` id itself (explicit or
+  omitted) always means the TypeSafe endpoint with model `jev-latest`.
 - Self-hosted services receive each target/effort option as a plain description string (for
   example `Target openai/gpt-5.6-sol (provider openai, model gpt-5.6-sol) with low reasoning
   effort.`), because Ollama accepts only string or `null` option descriptions. TypeSafe keeps
   receiving the structured option objects.
 - `tev1` was trained on 2–24 options, and Ollama accepts 2–26. Each target contributes one option per
   offered reasoning effort, so keep the target × effort pairs at 24 or fewer (use per-target
-  `reasoningEfforts` to trim them). Its effective context is about 2k tokens; OpenCodex already clips
-  the task text to 500 characters.
+  `reasoningEfforts` to trim them). Fewer than 2 or more than 26 options fail open without a
+  request. Its effective context is about 2k tokens; OpenCodex already clips the task text to 500
+  characters.
 - A cold model load can take tens of seconds, and an aborted decision request makes Ollama abandon the
   load. Pre-warm the model and keep it resident (`OLLAMA_KEEP_ALIVE=-1`, or `keep_alive`), and raise
   `decisionTimeoutMs` (1000–120000 ms, default 4000) when the service is slower than four seconds.
@@ -669,7 +676,7 @@ Combos are stored in the top-level `combos` object, keyed by combo id:
 | `alias` | No | none | Optional trimmed public model id; use the alias rules above. An empty value is stored as no alias. |
 | `nativeAlias` | No | `false` | Explicitly permit a currently supported bare native `alias` to take routing and catalog precedence. Never inferred from the alias. |
 | `displayName` | No | none | Bounded display-only catalog label. Required and non-empty when `nativeAlias` is true. |
-| `decisionProvider` | No | `"jev"` | JEV only. Provider id of the decision service: `"jev"` (TypeSafe, valid without a provider row) or a configured `adapter: "jev-decision"` row such as a self-hosted Ollama `tev1`. |
+| `decisionProvider` | No | `"jev"` | JEV only. Provider id of the decision service: `"jev"` (TypeSafe, valid without a provider row; the same as omission) or a configured `adapter: "jev-decision"` row with a `/systemone` `baseUrl`, such as a self-hosted Ollama `tev1`. |
 | `decisionTimeoutMs` | No | `4000` | JEV only. Integer from 1000 to 120000: the decision deadline before failing open to the first eligible target. |
 
 ## Troubleshooting

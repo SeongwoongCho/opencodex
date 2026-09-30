@@ -130,6 +130,9 @@ unqualified bare OpenAI model id. Bare `gpt-5.6-*` native aliases use Codex Pool
 Account-qualified OpenAI routes remain distinct, while provider-qualified routes such as
 `openai-apikey/gpt-5.6-*` use their configured API key and never fall through to the native alias.
 Read the safety and visibility contract in the guide before enabling the compatibility pair.
+With `--strategy jev` only, `--decision-provider <provider|->` names a configured `jev-decision`
+row (for example a self-hosted Ollama `tev1`) as the decision service and `--decision-timeout <ms|->`
+sets the decision deadline (1000–120000, default 4000); `-` clears either one.
 
 See [Combos](/guides/combos/) for routing behavior and configuration guidance.
 

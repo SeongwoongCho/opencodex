@@ -9,6 +9,15 @@ export const JEV_DECISION_TIMEOUT_MIN_MS = 1_000;
 export const JEV_DECISION_TIMEOUT_MAX_MS = 120_000;
 /** Canonical TypeSafe decision service; valid as `decisionProvider` even without a provider row. */
 const CANONICAL_JEV_DECISION_PROVIDER = "jev";
+
+/** Whether a self-hosted decision endpoint follows the documented Jev `/systemone` path. */
+export function isSystemOneEndpoint(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl.trim()).pathname.replace(/\/+$/, "").endsWith("/systemone");
+  } catch {
+    return false;
+  }
+}
 export { COMBO_NAMESPACE, preservesPhysicalComboProvider, isNativeAliasCombo, targetKey, parseComboModelId, comboModelId, comboPublicModelId, comboDisabledModelId, comboDisabledModelSelectors, resolveComboId, isValidComboId } from "./identifiers";
 
 /**
@@ -270,17 +279,22 @@ export function comboConfigIssues(
       issues.push({ path: ["decisionProvider"], message: "decisionProvider must be a non-empty provider name" });
     } else if (body.strategy !== "jev") {
       issues.push({ path: ["decisionProvider"], message: 'decisionProvider is only valid with strategy "jev"' });
+    } else if (decisionProvider === CANONICAL_JEV_DECISION_PROVIDER) {
+      // Explicit "jev" means exactly what omission means: the canonical TypeSafe service.
     } else if (!Object.hasOwn(providers, decisionProvider)) {
-      if (decisionProvider !== CANONICAL_JEV_DECISION_PROVIDER) {
-        issues.push({
-          path: ["decisionProvider"],
-          message: `decisionProvider "${decisionProvider}" is not configured`,
-        });
-      }
+      issues.push({
+        path: ["decisionProvider"],
+        message: `decisionProvider "${decisionProvider}" is not configured`,
+      });
     } else if (providers[decisionProvider]?.adapter !== "jev-decision") {
       issues.push({
         path: ["decisionProvider"],
         message: `decisionProvider "${decisionProvider}" is not a decision service (adapter must be "jev-decision")`,
+      });
+    } else if (!isSystemOneEndpoint(String(providers[decisionProvider]?.baseUrl ?? ""))) {
+      issues.push({
+        path: ["decisionProvider"],
+        message: `decisionProvider "${decisionProvider}" baseUrl must be the full decision endpoint ending in /systemone`,
       });
     }
   }
@@ -436,7 +450,8 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
     alias: alias || null,
     nativeAlias: raw.nativeAlias === true,
     displayName: displayName || null,
-    ...(decisionProvider ? { decisionProvider } : {}),
+    // Explicit "jev" is the default and stays sparse.
+    ...(decisionProvider && decisionProvider !== CANONICAL_JEV_DECISION_PROVIDER ? { decisionProvider } : {}),
     ...(typeof raw.decisionTimeoutMs === "number" ? { decisionTimeoutMs: raw.decisionTimeoutMs } : {}),
     targets: raw.targets.map(target => ({
       provider: target.provider.trim(),

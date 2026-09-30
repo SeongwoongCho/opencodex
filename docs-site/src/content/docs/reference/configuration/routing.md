@@ -146,7 +146,7 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `alias?` | `string` | — | Optional public model id in place of the canonical picker slug. |
 | `nativeAlias?` | `boolean` | `false` | Let a currently supported bare native id take precedence only for that unqualified id. Bare `gpt-5.6-*` ids use Codex Pool/Direct credentials. Account-qualified routes remain distinct. Provider-qualified routes such as `openai-apikey/gpt-5.6-*` use their configured API-key route and never fall through to the native alias. |
 | `displayName?` | `string` | — | Display-only catalog label, required and non-empty for a native alias. |
-| `decisionProvider?` | `string` | `"jev"` | `strategy: "jev"` only. `"jev"` is the TypeSafe decision service (valid without a provider row); any other value must name a configured provider with `adapter: "jev-decision"`. |
+| `decisionProvider?` | `string` | `"jev"` | `strategy: "jev"` only. `"jev"` (the same as omitting it, and stored as omission) is the TypeSafe decision service, valid without a provider row; any other value must name a configured provider with `adapter: "jev-decision"` whose `baseUrl` ends in `/systemone`. |
 | `decisionTimeoutMs?` | `number` | `4000` | `strategy: "jev"` only. Decision deadline before failing open, 1000–120000 ms. |
 
 ```json
@@ -208,11 +208,14 @@ Ollama's `tev1` (Ollama 0.35+, `POST /v1/systemone`, no API key):
 }
 ```
 
-The row's `baseUrl` is the full decision endpoint; its model is `defaultModel`, else `models[0]`,
-else `jev-latest`. Loopback needs the row's own `allowPrivateNetwork: true`, and plain `http:` is
-accepted only for such a local literal address. Only the row's own `apiKey` is sent — none when it is
-unset — and TypeSafe credentials never reach it. Options are sent as description strings, which
-Ollama requires. `tev1` was trained on 2–24 options, so keep target × effort pairs at 24 or fewer;
+The row's `baseUrl` is the full decision endpoint and must end in `/systemone`; its model is
+`defaultModel`, else `models[0]` (a row with neither fails open without a request). Loopback needs
+the row's own explicit `allowPrivateNetwork: true`, and plain `http:` is accepted only for `localhost`
+or a loopback/RFC 1918/ULA address literal reached without a proxy. Only the row's own `apiKey` is
+sent — none when it is unset — and a key referencing the TypeSafe environment variables or another
+provider's keychain entry is refused, so TypeSafe credentials never reach it. Options are sent as
+description strings, which Ollama requires. `tev1` was trained on 2–24 options, so keep target ×
+effort pairs at 24 or fewer (fewer than 2 or more than 26 fail open without a request);
 its effective context is about 2k tokens and OpenCodex clips the task text to 500 characters. Keep the
 model resident (`OLLAMA_KEEP_ALIVE=-1`) and raise `decisionTimeoutMs` for slow services; see
 [Self-hosted decision model](/guides/combos/#self-hosted-decision-model-eg-ollama-tev1).

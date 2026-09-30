@@ -304,21 +304,21 @@ routable adapter registry, live discovery is disabled, no default/static model i
 key login returns unknown without probing a nonexistent model catalog. The normal `ocx login jev`
 flow and provider-workspace API-key panel both persist the same credential-only row. Combo validation
 rejects every `jev-decision` row as a target; `src/codex/catalog/gather-capture.ts` never gathers one.
-`src/server/management/provider-routes.ts` tests those rows (not a retargeted `jev`) through
-`probeJevDecisionProvider` before the static-catalog branch, with no user prompt and sanitized status.
+`src/server/management/provider-routes.ts` tests those rows through `probeJevDecisionProvider`
+(no user prompt, sanitized status); a retargeted `jev` row reports not-applicable and sends nothing.
 
 The request path consumes a configured literal/reference key only when the row still matches the
 canonical registry transport, with `TYPESAFE_API_KEY` and the standard provider-derived
 `JEV_API_KEY` as explicit environment fallbacks. A same-named custom destination cannot receive
 either credential through the JEV client; a retargeted `jev` row is ignored, never a custom
-destination. All automated coverage mocks TypeSafe; live-key behavior is an operator smoke boundary.
-A Combo's `decisionProvider` selects the service: omitted or `"jev"` is that canonical path (a
-canonical row's `defaultModel` may replace `jev-latest`); any other id must be a `jev-decision` row
-whose `baseUrl` is the full endpoint, whose model is `defaultModel`/`models[0]`/`jev-latest`, and
-whose own `apiKey` alone is sent (none when unset). The row is the outbound provider config, so
-loopback needs its `allowPrivateNetwork`, and `allowLocalCleartextPost` admits `http:` only for a
-local literal. Options go out as description strings, as Ollama's System One endpoint requires.
-Unusable rows reuse the `missing_key` gate; `decisionTimeoutMs` (1000..120000) replaces the 4 s default.
+destination. Automated coverage mocks TypeSafe; live-key behavior is an operator smoke boundary. A Combo's `decisionProvider` selects the service: omitted or `"jev"` (stored as omission) is that
+canonical path with `jev-latest`; any other id must be an enabled `jev-decision` row with a full
+`/systemone` `baseUrl` and a `defaultModel`/`models[0]`, sending only its own `apiKey` (a TypeSafe
+env reference or foreign keychain entry makes it unusable). `allowLocalCleartextPost` in
+`src/lib/provider-outbound.ts` admits `http:` only with the row's explicit `allowPrivateNetwork`, a
+`localhost`/loopback/RFC 1918/ULA host whose answers stay in that set, and no proxy. Options go out as
+strings (Ollama requires them); under 2 or over 26 fail open locally (`no_choices`/`invalid`), unusable
+rows reuse `missing_key`, and `decisionTimeoutMs` (1000..120000) replaces the 4 s default.
 
 `src/combos/jev.ts` extracts bounded user-task, previous-assistant, and latest-tool-output text plus
 the tool name and boolean signals; raw image data, tool arguments, encrypted reasoning, headers, and
