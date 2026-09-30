@@ -4,6 +4,7 @@ import {
   jevDecisionSummary,
   jevEffectiveFallbackLevel,
   jevLevelCandidateLabel,
+  jevStaleLevelCandidates,
   parseComboList,
   toPutBody,
 } from "../../gui/src/combo-workspace-data";
@@ -57,5 +58,32 @@ describe("dashboard level-mode data", () => {
     expect(draftEquals(item!, { ...item!, decisionMode: undefined })).toBeFalse();
     expect(jevDecisionSummary(item!, [])?.mode).toBe("level");
     expect(jevDecisionSummary({ ...item!, decisionMode: undefined }, [])?.mode).toBe("route");
+  });
+
+  test("flags level candidates whose target or effort the draft no longer has", () => {
+    const [item] = parseComboList({ combos: [row] });
+    // `cursor/claude-sonnet-5-5` and `openai/gpt-6-luna:low` are not targets of this row.
+    expect(jevStaleLevelCandidates(item!)).toEqual(["openai/gpt-6-luna:low", "cursor/claude-sonnet-5-5"]);
+    const complete = {
+      ...item!,
+      targets: [
+        { provider: "openai", model: "gpt-6-astra", reasoningEfforts: ["xhigh" as const] },
+        { provider: "openai", model: "gpt-6-luna" },
+        { provider: "cursor", model: "claude-sonnet-5-5" },
+      ],
+    };
+    expect(jevStaleLevelCandidates(complete)).toEqual([]);
+    const effortGone = { ...complete, targets: [{ ...complete.targets[0]!, reasoningEfforts: ["low" as const] }, ...complete.targets.slice(1)] };
+    expect(jevStaleLevelCandidates(effortGone)).toEqual(["openai/gpt-6-astra:xhigh"]);
+    expect(jevStaleLevelCandidates({ ...item!, strategy: "failover" })).toEqual([]);
+    expect(jevStaleLevelCandidates({ ...item!, clearDecisionLevels: true })).toEqual([]);
+  });
+
+  test("an explicit clear sends null levels and fallback, only in route mode", () => {
+    const [item] = parseComboList({ combos: [row] });
+    const cleared = { ...item!, decisionMode: undefined, decisionLevels: undefined, clearDecisionLevels: true as const };
+    expect(toPutBody(cleared).combo).toMatchObject({ decisionMode: null, decisionLevels: null, decisionFallbackLevel: null });
+    expect(toPutBody({ ...item!, clearDecisionLevels: true }).combo).not.toHaveProperty("decisionLevels");
+    expect(draftEquals(item!, { ...item!, clearDecisionLevels: true })).toBeFalse();
   });
 });

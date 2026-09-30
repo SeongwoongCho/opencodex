@@ -164,6 +164,9 @@ export function JevDecisionFields({
   decisionMode,
   decisionLevels,
   decisionFallbackLevel,
+  comboId = "",
+  staleLevelCandidates,
+  clearDecisionLevels = false,
   disabled,
   onChange,
 }: {
@@ -175,12 +178,18 @@ export function JevDecisionFields({
   decisionMode?: "level";
   decisionLevels?: ComboDecisionLevels;
   decisionFallbackLevel?: JevLevelId;
+  comboId?: string;
+  staleLevelCandidates?: readonly string[];
+  clearDecisionLevels?: boolean;
   disabled?: boolean;
   onChange: (patch: {
     decisionProvider?: string | null;
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
     decisionMode?: "level";
+    decisionLevels?: undefined;
+    decisionFallbackLevel?: undefined;
+    clearDecisionLevels?: true;
   }) => void;
 }) {
   const t = useT();
@@ -278,11 +287,15 @@ export function JevDecisionFields({
       </div>
       <JevDecisionModeField
         idPrefix={idPrefix}
+        comboId={comboId}
         decisionMode={decisionMode}
         decisionLevels={decisionLevels}
         decisionFallbackLevel={decisionFallbackLevel}
+        staleLevelCandidates={staleLevelCandidates}
+        clearRequested={clearDecisionLevels}
         disabled={disabled}
         onChange={(mode) => onChange({ decisionMode: mode })}
+        onClearLevels={() => onChange({ clearDecisionLevels: true, decisionLevels: undefined, decisionFallbackLevel: undefined })}
       />
     </>
   );

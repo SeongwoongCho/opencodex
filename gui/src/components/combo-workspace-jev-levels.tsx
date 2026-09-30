@@ -1,4 +1,5 @@
 import { jevEffectiveFallbackLevel, jevLevelCandidateLabel, type ComboDecisionLevels, type JevLevelId } from "../combo-workspace-data";
+import { Trans } from "../i18n/provider";
 import { useT } from "../i18n/shared";
 
 /**
@@ -7,22 +8,33 @@ import { useT } from "../i18n/shared";
  */
 export function JevDecisionModeField({
   idPrefix,
+  comboId,
   decisionMode,
   decisionLevels,
   decisionFallbackLevel,
+  staleLevelCandidates = [],
+  clearRequested = false,
   disabled,
   onChange,
+  onClearLevels,
 }: {
   idPrefix: string;
+  /** Combo id for the CLI fix shown when stored levels no longer match the targets. */
+  comboId: string;
   decisionMode: "level" | undefined;
   decisionLevels: ComboDecisionLevels | undefined;
   decisionFallbackLevel: JevLevelId | undefined;
+  staleLevelCandidates?: readonly string[];
+  clearRequested?: boolean;
   disabled?: boolean;
   onChange: (decisionMode: "level" | undefined) => void;
+  /** Absent where levels cannot be cleared (a new Combo has none). */
+  onClearLevels?: () => void;
 }) {
   const t = useT();
   const hasLevels = (decisionLevels?.length ?? 0) > 0;
   const level = decisionMode === "level";
+  const fixCommand = "ocx combo set <id> --decision-levels '<json>'".replace("<id>", comboId || "<id>");
   return (
     <div className="cwi-field">
       <label htmlFor={`${idPrefix}-decision-mode`}>{t("cws.jev.decisionMode")}</label>
@@ -41,6 +53,22 @@ export function JevDecisionModeField({
       <p id={`${idPrefix}-decision-mode-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
         {t("cws.jev.decisionModeHint")} {!hasLevels && t("cws.jev.decisionModeNoLevels")}
       </p>
+      {staleLevelCandidates.length > 0 && (
+        <p role="alert" data-jev-levels-stale style={{ fontSize: 12, margin: "8px 0 0", color: "var(--danger, #b42318)" }}>
+          <Trans k="cws.jev.levelsStale" cmd={fixCommand} vars={{ candidates: staleLevelCandidates.join(", ") }} />
+        </p>
+      )}
+      {!level && hasLevels && onClearLevels && (
+        <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
+          {t("cws.jev.levelsStored", { count: decisionLevels!.length })}{" "}
+          <button type="button" className="btn btn-sm" data-jev-levels-clear disabled={disabled} onClick={onClearLevels}>
+            {t("cws.jev.levelsClear")}
+          </button>
+        </p>
+      )}
+      {clearRequested && (
+        <p className="muted" data-jev-levels-cleared style={{ fontSize: 12, margin: "8px 0 0" }}>{t("cws.jev.levelsCleared")}</p>
+      )}
       {level && hasLevels && (
         <section className="pwi-section" aria-label={t("cws.jev.levelsTitle")} data-jev-levels style={{ marginTop: 8 }}>
           <h4 className="pwi-section-title" style={{ fontSize: 13 }}>{t("cws.jev.levelsTitle")}</h4>

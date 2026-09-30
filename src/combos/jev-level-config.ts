@@ -66,10 +66,16 @@ function targetEfforts(targets: unknown): Map<string, readonly string[] | undefi
   return byKey;
 }
 
+/** How to get out of a stale level list; the dashboard cannot edit levels, so it names the CLI. */
+function levelFixHint(comboId: string): string {
+  return `; update the levels with \`ocx combo set ${comboId} --decision-levels '<json>'\` or clear them with \`--decision-mode - --decision-levels -\``;
+}
+
 function levelIssues(
   id: JevLevelId,
   raw: unknown,
   targets: Map<string, readonly string[] | undefined>,
+  fixHint: string,
 ): JevLevelConfigIssue[] {
   const path = ["decisionLevels", id];
   if (!isRecord(raw)) return [{ path, message: `decisionLevels.${id} must be an object with a candidates array` }];
@@ -104,7 +110,7 @@ function levelIssues(
     const model = typeof candidate.model === "string" ? candidate.model.trim() : "";
     const key = `${provider}/${model}`;
     if (!provider || !model || !targets.has(key)) {
-      issues.push({ path: candidatePath, message: `${at} must name one of the combo targets by provider and model` });
+      issues.push({ path: candidatePath, message: `${at} must name one of the combo targets by provider and model${fixHint}` });
       return;
     }
     const effort = candidate.effort;
@@ -120,7 +126,7 @@ function levelIssues(
       if (allowed !== undefined && !allowed.includes(effort)) {
         issues.push({
           path: [...candidatePath, "effort"],
-          message: `${at}.effort "${effort}" is not in the reasoningEfforts of target "${key}"`,
+          message: `${at}.effort "${effort}" is not in the reasoningEfforts of target "${key}"${fixHint}`,
         });
         return;
       }
@@ -136,7 +142,7 @@ function levelIssues(
 }
 
 /** Issues for the three level-mode fields of one raw Combo body. */
-export function jevLevelConfigIssues(body: Record<string, unknown>): JevLevelConfigIssue[] {
+export function jevLevelConfigIssues(body: Record<string, unknown>, comboId = "<id>"): JevLevelConfigIssue[] {
   const issues: JevLevelConfigIssue[] = [];
   const jev = body.strategy === "jev";
   const mode = body.decisionMode;
@@ -176,7 +182,7 @@ export function jevLevelConfigIssues(body: Record<string, unknown>): JevLevelCon
       }
       const targets = targetEfforts(body.targets);
       for (const id of JEV_LEVEL_IDS) {
-        if (configured.has(id)) issues.push(...levelIssues(id, levels[id], targets));
+        if (configured.has(id)) issues.push(...levelIssues(id, levels[id], targets, levelFixHint(comboId)));
       }
     }
   }
@@ -190,7 +196,9 @@ export function jevLevelConfigIssues(body: Record<string, unknown>): JevLevelCon
       });
     } else if (!jev) {
       issues.push({ path: ["decisionFallbackLevel"], message: 'decisionFallbackLevel is only valid with strategy "jev"' });
-    } else if (configured && !configured.has(fallback)) {
+    } else if (!configured) {
+      issues.push({ path: ["decisionFallbackLevel"], message: "decisionFallbackLevel requires decisionLevels" });
+    } else if (!configured.has(fallback)) {
       issues.push({
         path: ["decisionFallbackLevel"],
         message: `decisionFallbackLevel "${fallback}" is not configured in decisionLevels`,

@@ -164,3 +164,52 @@ test("level mode cannot be picked without stored levels", async () => {
   expect(host.querySelector("#cwi-edit-decision-mode-hint")?.textContent).toContain("needs decision levels");
   expect(host.querySelector('[data-decision-mode="level"]')).toBeNull();
 });
+
+test("stale level candidates show the fix before Save, and route mode can clear the levels", async () => {
+  const saved: ComboItem[] = [];
+  // The luna target is gone, and sol no longer allows the medium effort a level names.
+  const staleCombo: ComboItem = {
+    ...levelCombo,
+    targets: [
+      { provider: "openai", model: "gpt-6-astra", clientKey: "t1" },
+      { provider: "openai", model: "gpt-5.6-sol", clientKey: "t2", reasoningEfforts: ["low"] },
+    ],
+  };
+  const host = await renderWorkspace([staleCombo], saved);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!.click(); });
+  await flush();
+
+  const warning = host.querySelector("[data-jev-levels-stale]")!;
+  expect(warning.getAttribute("role")).toBe("alert");
+  expect(warning.textContent).toContain("openai/gpt-5.6-luna:low, openai/gpt-5.6-sol:medium");
+  expect(warning.querySelector("code")?.textContent).toBe("ocx combo set tev-auto --decision-levels '<json>'");
+  // Clearing is offered only in route mode.
+  expect(host.querySelector("[data-jev-levels-clear]")).toBeNull();
+
+  await act(async () => { setSelect(host.querySelector<HTMLSelectElement>("#cwi-edit-decision-mode")!, "route"); });
+  const clear = host.querySelector<HTMLButtonElement>("[data-jev-levels-clear]")!;
+  expect(clear.textContent).toBe("Clear stored levels");
+  await act(async () => { clear.click(); });
+  expect(host.querySelector("[data-jev-levels-stale]")).toBeNull();
+  expect(host.querySelector("[data-jev-levels-cleared]")).not.toBeNull();
+  expect(host.querySelector<HTMLOptionElement>('#cwi-edit-decision-mode option[value="level"]')!.disabled).toBe(true);
+
+  await act(async () => { host.querySelector<HTMLButtonElement>("#cwi-edit-save")!.click(); });
+  await flush();
+  const last = saved.at(-1)!;
+  expect(last.clearDecisionLevels).toBe(true);
+  expect(last.decisionLevels).toBeUndefined();
+});
+
+test("leaving the JEV strategy warns that stored levels will be discarded", async () => {
+  const host = await renderWorkspace([levelCombo], []);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!.click(); });
+  await flush();
+  expect(host.querySelector("[data-jev-levels-discard]")).toBeNull();
+  const failover = [...host.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    .find(candidate => candidate.textContent?.trim() === "Failover")!;
+  await act(async () => { failover.click(); });
+  const warning = host.querySelector("[data-jev-levels-discard]")!;
+  expect(warning.getAttribute("role")).toBe("alert");
+  expect(warning.textContent).toContain("permanently removes");
+});

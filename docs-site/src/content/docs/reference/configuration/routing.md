@@ -151,7 +151,7 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `decisionQuotaSignals?` | `boolean` | `false` | `strategy: "jev"` only. Attach each target's remaining-quota tier (from cached provider quota, never a fresh probe) to the decision. In level mode, prefer healthier tiers when selecting instead. |
 | `decisionMode?` | `"route" \| "level"` | `"route"` | `strategy: "jev"` only. `"level"` asks the decision model only for a demand level and selects from `decisionLevels`. Stored as omission when `"route"`. |
 | `decisionLevels?` | `object` | — | `strategy: "jev"` only; required by `decisionMode: "level"` and kept in route mode. Keys are at least two of `trivial`, `routine`, `hard`, `deep`, `agentic_heavy`, `agentic_light`; values are `{ description?: string, candidates: { provider, model, effort? }[] }` with 1–32 candidates naming Combo targets and efforts those targets allow. |
-| `decisionFallbackLevel?` | level id | `"routine"` | `strategy: "jev"` only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`. |
+| `decisionFallbackLevel?` | level id | `"routine"` | `strategy: "jev"` only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`, and is refused without them. |
 
 ```json
 {
@@ -248,8 +248,10 @@ eligible and still allows the candidate's effort; with `decisionQuotaSignals: tr
 or unknown-quota candidate, else the first limited one, else a nearly exhausted one. A level with no
 usable candidate tries `decisionFallbackLevel` (default `routine`), then fails open to the first
 eligible target; a failed decision fails open directly. The JEV decision record gains `level` and
-`levelPath` (`chosen`, `fallback_level`, `fail_open`). While a quota-aware level-mode Combo exists, the
-running server refreshes the cached quota rows about every five minutes in the background.
+`levelPath` (`chosen`, `fallback_level`, `fail_open`). While any quota-aware JEV Combo exists (either
+mode), the running server refreshes the cached quota rows every 12 to 15 minutes in the background,
+probing every configured provider as the Providers page does. A level `description` is sent to the
+decision service with each decision; keep secrets and private paths out of it.
 
 ```json
 {

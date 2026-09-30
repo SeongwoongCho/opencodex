@@ -15,12 +15,13 @@ afterEach(() => resetJevQuotaWarmerForTests());
 const levelCombo = { strategy: "jev", decisionMode: "level", decisionQuotaSignals: true, targets: [] };
 
 describe("JEV quota warmer", () => {
-  test("only a quota-aware JEV level-mode combo needs warm quota rows", () => {
+  test("any quota-aware JEV combo needs warm quota rows, in either decision mode", () => {
     expect(configNeedsJevQuotaWarmth({ combos: { auto: levelCombo } })).toBeTrue();
+    expect(configNeedsJevQuotaWarmth({ combos: { auto: { ...levelCombo, decisionMode: undefined } } })).toBeTrue();
+    expect(configNeedsJevQuotaWarmth({ combos: { auto: { ...levelCombo, decisionMode: "route" } } })).toBeTrue();
     for (const combo of [
       { ...levelCombo, decisionQuotaSignals: false },
-      { ...levelCombo, decisionMode: undefined },
-      { ...levelCombo, decisionMode: "route" },
+      { ...levelCombo, decisionQuotaSignals: undefined },
       { ...levelCombo, strategy: "failover" },
       null,
     ]) {
@@ -67,13 +68,61 @@ describe("JEV quota warmer", () => {
     expect(jevQuotaWarmerRefreshCountForTests()).toBe(1);
   });
 
-  test("start is idempotent and stop cancels the pending tick", () => {
+  test("start is idempotent and stop cancels the pending tick", async () => {
+    const refreshed: unknown[] = [];
+    const deps = { loadConfig: () => ({ combos: { auto: levelCombo } }), refresh: async (value: unknown) => { refreshed.push(value); } };
     expect(isJevQuotaWarmerRunning()).toBeFalse();
-    startJevQuotaWarmer(60_000);
-    startJevQuotaWarmer(60_000);
+    startJevQuotaWarmer({ initialDelayMs: 5, intervalMs: 5, deps });
+    startJevQuotaWarmer({ initialDelayMs: 5, intervalMs: 5, deps });
     expect(isJevQuotaWarmerRunning()).toBeTrue();
     stopJevQuotaWarmer();
     expect(isJevQuotaWarmerRunning()).toBeFalse();
+    await Bun.sleep(30);
+    expect(refreshed).toEqual([]);
+    expect(jevQuotaWarmerRefreshCountForTests()).toBe(0);
+  });
+
+  test("a completed tick schedules the next one", async () => {
+    let refreshes = 0;
+    const deps = { loadConfig: () => ({ combos: { auto: levelCombo } }), refresh: async () => { refreshes += 1; } };
+    startJevQuotaWarmer({ initialDelayMs: 1, intervalMs: 5, deps });
+    const deadline = Date.now() + 2_000;
+    while (refreshes < 3 && Date.now() < deadline) await Bun.sleep(5);
+    expect(refreshes).toBeGreaterThanOrEqual(3);
+    stopJevQuotaWarmer();
+    const settled = refreshes;
+    await Bun.sleep(30);
+    // At most the flight already running when stop landed finishes; nothing reschedules.
+    expect(refreshes - settled).toBeLessThanOrEqual(1);
+  });
+
+  test("a stop and start while a tick is in flight keeps the warmer ticking", async () => {
+    let refreshes = 0;
+    let release: () => void = () => {};
+    let blocking = true;
+    const deps = {
+      loadConfig: () => ({ combos: { auto: levelCombo } }),
+      refresh: () => {
+        refreshes += 1;
+        if (!blocking) return Promise.resolve();
+        return new Promise<void>(resolve => { release = resolve; });
+      },
+    };
+    // A flight from the previous generation is still running when the warmer restarts.
+    const stale = runJevQuotaWarmerTickForTests(deps);
+    await Bun.sleep(0);
+    startJevQuotaWarmer({ initialDelayMs: 1, intervalMs: 5, deps });
+    stopJevQuotaWarmer();
+    startJevQuotaWarmer({ initialDelayMs: 1, intervalMs: 5, deps });
+    // The restarted timer fires and joins the stale flight, clearing its own timer.
+    await Bun.sleep(20);
+    blocking = false;
+    release();
+    await stale;
+    const deadline = Date.now() + 2_000;
+    while (refreshes < 3 && Date.now() < deadline) await Bun.sleep(5);
+    expect(refreshes).toBeGreaterThanOrEqual(3);
+    expect(isJevQuotaWarmerRunning()).toBeTrue();
   });
 
   test("costs the server one import-free module and stays off the request path", () => {

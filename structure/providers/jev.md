@@ -112,10 +112,17 @@ descriptions, the default fallback level `routine`, and the `chosen`/`fallback_l
 paths the GUI and telemetry share. `src/combos/jev-level-config.ts` validates and sparsely normalizes
 `decisionLevels` (at least two known levels in canonical order, 1–32 candidates each, every candidate a
 Combo target with an effort from that target's `reasoningEfforts` when set, no duplicates, optional
-bounded `description`) and `decisionFallbackLevel` (a configured level); all three fields are
-refused off `jev`, and `decisionMode: "level"` without levels is refused. Management PUT carries each
-of them across an omission while the strategy stays `jev`; the dashboard sends only `decisionMode`,
-so levels it shows read-only survive its saves.
+bounded `description`) and `decisionFallbackLevel` (a configured level, refused without levels); all
+three fields are refused off `jev`, and `decisionMode: "level"` without levels is refused. A stale
+candidate (its target removed or its effort no longer in the target's `reasoningEfforts`) is refused
+with the `ocx combo set <id> --decision-levels` / `--decision-mode - --decision-levels -` fix in the
+message, because it is the one level error a dashboard save can hit. A level `description`, like a
+target `modelProfile`, reaches the decision service with every level-mode decision, so operators must
+keep secrets and private paths out of it. `src/providers/provider-id-rewrite.ts` re-points level
+candidates with the targets they name. Management PUT carries each
+of them across an omission while the strategy stays `jev` (the fallback level only while levels
+remain); the dashboard sends only `decisionMode`, so levels it shows read-only survive its saves,
+except for its route-mode **Clear stored levels**, which sends `decisionLevels: null`.
 
 `src/combos/jev-level.ts` asks one `level` choice question with plain string criteria (the same
 shape for TypeSafe and self-hosted services) over `buildJevState(body)` without candidates, so no
@@ -128,15 +135,21 @@ synchronous: the level's candidates in order, restricted to the route-mode eligi
 efforts); an effort-less candidate takes the fail-open effort. With `decisionQuotaSignals: true` the
 `jev-quota.ts` tier on each eligible candidate orders the level stably (healthy or unknown, then
 limited, then nearly exhausted), which makes quota a deterministic preference rather than advice.
+The tier is the provider's displayed quota row (pool aggregate, active account, or active key), not the
+account the dispatcher would pick for this request; `getCachedProviderRoutingQuota` covers only a sole
+key credential, so it cannot speak for pools or OAuth accounts.
 No usable candidate tries `decisionFallbackLevel`, then the first-eligible fail-open target; a failed
 decision fails open with the route-mode gate. `core-combo.ts` applies the chosen effort exactly like a
 route decision and persists `level`/`levelPath` plus, when quota-aware, the tier summary over the
 weighed candidates; `src/usage/jev-stats.ts` keeps only known values, and a `level` only beside a
 `levelPath`.
 
-`src/combos/jev-quota-warmer.ts` keeps those cached quota rows fresh while a quota-aware level-mode
-Combo exists: `src/server/background-lifecycle.ts` starts one unref'd timer (first tick after about a
-minute, then every five minutes plus up to a minute of jitter) whose tick reloads config and, only for
-such a Combo, calls the unforced `fetchProviderQuotaReports` the Providers page uses, joining any
-refresh in flight. The module has no static imports, so the composition-root edge costs one module and
+`src/combos/jev-quota-warmer.ts` keeps those cached quota rows fresh while any quota-aware JEV Combo
+exists, in either mode: `src/server/background-lifecycle.ts` starts one unref'd timer (first tick after
+one to four minutes, then every 12 minutes plus up to three of jitter, inside the 30-minute staleness
+bound) whose tick reloads config and, only for such a Combo, calls the unforced
+`fetchProviderQuotaReports` the Providers page uses, joining any refresh in flight. That refresh probes
+every configured provider: its publish replaces the whole cached row set, so a refresh narrowed to the
+Combo's targets would erase every other provider's row. A running warmer always re-arms after a tick,
+including one that joined a flight from before a stop and start. The module has no static imports, so the composition-root edge costs one module and
 nothing reaches the request path.

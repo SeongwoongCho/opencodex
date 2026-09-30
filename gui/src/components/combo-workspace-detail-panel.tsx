@@ -15,7 +15,7 @@ import { useT } from "../i18n/shared";
 import { Notice } from "../ui";
 import type { ModelOption, ProviderOption } from "./combo-workspace-types";
 import { ComboCapabilities, EffortSelect, JevDecisionFields, StrategySeg, TargetEditor } from "./combo-workspace-controls";
-import { COMBO_STRATEGY_HINT_KEYS, COMBO_TARGETS_HINT_KEYS } from "../combo-workspace-data";
+import { COMBO_STRATEGY_HINT_KEYS, COMBO_TARGETS_HINT_KEYS, jevStaleLevelCandidates } from "../combo-workspace-data";
 import { clampedNumberInput, comboDraftErrorText } from "./combo-workspace-utils";
 import type { JevDecisionRow } from "../jev-decision-service";
 import { JevStatsPanel } from "./jev-stats-panel";
@@ -94,8 +94,9 @@ export function DetailPanel({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const dirty = !draftEquals(draft, baseline);
+  const staleLevelCandidates = useMemo(() => jevStaleLevelCandidates(draft), [draft]);
   const allTargetsExhausted = comboQuotaState(draft.targets, providerQuotaStates, providerMap) === "exhausted";
-  const baselineSyncKey = JSON.stringify([baseline.id, baseline.alias, baseline.nativeAlias, baseline.displayName, baseline.strategy, baseline.stickyLimit, baseline.defaultEffort, baseline.imageInput, baseline.reasoningEffortMode, baseline.decisionProvider, baseline.decisionTimeoutMs, baseline.decisionQuotaSignals, baseline.decisionMode, baseline.decisionLevels, baseline.decisionFallbackLevel, baseline.targets.map(t => [t.provider, t.model, t.weight, t.reasoningEfforts, t.modelProfile])]);
+  const baselineSyncKey = JSON.stringify([baseline.id, baseline.alias, baseline.nativeAlias, baseline.displayName, baseline.strategy, baseline.stickyLimit, baseline.defaultEffort, baseline.imageInput, baseline.reasoningEffortMode, baseline.decisionProvider, baseline.decisionTimeoutMs, baseline.decisionQuotaSignals, baseline.decisionMode, baseline.decisionLevels, baseline.decisionFallbackLevel, baseline.clearDecisionLevels, baseline.targets.map(t => [t.provider, t.model, t.weight, t.reasoningEfforts, t.modelProfile])]);
   const effortMap = useMemo(() => {
     const map = new Map<string, string[] | undefined>();
     for (const model of models) {
@@ -173,7 +174,9 @@ export function DetailPanel({
         ok: true,
         text: isCreate ? t("cws.created", { model: item.model }) : t("cws.saved"),
       });
-      onSaved(item);
+      // The clear request was carried by this save; the saved baseline simply has no levels.
+      const { clearDecisionLevels: _cleared, ...savedItem } = item;
+      onSaved(savedItem);
     } finally {
       setBusy(false);
     }
@@ -336,6 +339,11 @@ export function DetailPanel({
               <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
                 {t(COMBO_STRATEGY_HINT_KEYS[draft.strategy])}
               </p>
+              {draft.strategy !== "jev" && (draft.decisionLevels?.length ?? 0) > 0 && (
+                <p role="alert" data-jev-levels-discard style={{ fontSize: 12, margin: "8px 0 0", color: "var(--danger, #b42318)" }}>
+                  {t("cws.jev.levelsDiscardWarning")}
+                </p>
+              )}
             </div>
             {draft.strategy === "jev" && (
               <JevDecisionFields
@@ -347,6 +355,9 @@ export function DetailPanel({
                 decisionMode={draft.decisionMode}
                 decisionLevels={draft.decisionLevels}
                 decisionFallbackLevel={draft.decisionFallbackLevel}
+                comboId={baseline.id}
+                staleLevelCandidates={staleLevelCandidates}
+                clearDecisionLevels={draft.clearDecisionLevels === true}
                 disabled={busy}
                 onChange={(patch) => updateDraft((d) => ({ ...d, ...patch }))}
               />

@@ -746,7 +746,8 @@ export async function exchangeJevDecision(
 
   let requestBody: string;
   try {
-    const prepared = prepare(endpoint);
+    // `prepare` sees only the request shape, never the credential or the destination.
+    const prepared = prepare({ model: endpoint.model, descriptiveCriteria: endpoint.descriptiveCriteria });
     if (typeof prepared === "string") return { gate: prepared };
     requestBody = prepared.body;
   } catch {

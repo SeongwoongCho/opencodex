@@ -177,6 +177,8 @@ export interface ComboItem {
   decisionLevels?: ComboDecisionLevels;
   /** `jev` only: explicit level-mode fallback level; read-only, never sent back. */
   decisionFallbackLevel?: JevLevelId;
+  /** Draft-only: remove the stored levels (and fallback level) on the next save; route mode only. */
+  clearDecisionLevels?: true;
   targets: ComboTarget[];
 }
 
@@ -536,6 +538,7 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
       || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
       || (a.decisionQuotaSignals === true) !== (b.decisionQuotaSignals === true)
       || (a.decisionMode ?? "route") !== (b.decisionMode ?? "route")
+      || (a.clearDecisionLevels === true) !== (b.clearDecisionLevels === true)
     ))
   ) return false;
   if (a.targets.length !== b.targets.length) return false;
@@ -566,6 +569,8 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
     decisionMode?: "level" | null;
+    decisionLevels?: null;
+    decisionFallbackLevel?: null;
   };
 } {
   const weighted = item.strategy === "round-robin" || item.strategy === "random";
@@ -606,6 +611,10 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
             // Null selects route mode. Levels and the fallback level are never sent: the server
             // keeps the stored ones, which the dashboard shows but does not edit.
             decisionMode: item.decisionMode === "level" ? "level" : null,
+            // The one level edit the dashboard makes: an explicit clear, offered only in route mode.
+            ...(item.clearDecisionLevels && item.decisionMode !== "level"
+              ? { decisionLevels: null, decisionFallbackLevel: null }
+              : {}),
           }
         : {}),
     },
@@ -841,6 +850,33 @@ export function jevDecisionSummary(
 /** Level-mode fallback level as the server applies it: the stored one, else the default. */
 export function jevEffectiveFallbackLevel(item: Pick<ComboItem, "decisionFallbackLevel">): JevLevelId {
   return item.decisionFallbackLevel ?? JEV_DEFAULT_FALLBACK_LEVEL;
+}
+
+/**
+ * Level candidates the server would refuse for this draft: the target is gone from `targets`, or the
+ * target's own `reasoningEfforts` no longer includes the candidate's effort. Empty unless a JEV
+ * draft still carries levels, so it is safe to call for any strategy.
+ */
+export function jevStaleLevelCandidates(
+  item: Pick<ComboItem, "strategy" | "decisionLevels" | "clearDecisionLevels" | "targets">,
+): string[] {
+  if (item.strategy !== "jev" || item.clearDecisionLevels || !item.decisionLevels) return [];
+  // Per target: its allowed efforts, or null when it names none (any effort is accepted then).
+  const targets = new Map(item.targets.map(target => [
+    `${target.provider.trim()}/${target.model.trim()}`,
+    target.reasoningEfforts === undefined ? null : new Set<ComboEffort>(target.reasoningEfforts),
+  ]));
+  const stale = new Set<string>();
+  for (const level of item.decisionLevels) {
+    for (const candidate of level.candidates) {
+      const key = `${candidate.provider}/${candidate.model}`;
+      const efforts = targets.get(key);
+      if (!targets.has(key) || (candidate.effort !== undefined && efforts && !efforts.has(candidate.effort))) {
+        stale.add(jevLevelCandidateLabel(candidate));
+      }
+    }
+  }
+  return [...stale];
 }
 
 /** One display line per level candidate: `provider/model:effort`, or without effort when unset. */

@@ -340,6 +340,8 @@ describe("level-mode combo fields", () => {
   });
 
   test("rejects every malformed level-mode shape with a specific message", () => {
+    // A stale candidate is the one error a dashboard save can hit, so it names the way out.
+    const fix = "; update the levels with `ocx combo set auto --decision-levels '<json>'` or clear them with `--decision-mode - --decision-levels -`";
     expect(issuesFor({ strategy: "jev", decisionMode: "auto" })).toEqual(['decisionMode must be "route" or "level"']);
     expect(issuesFor({ strategy: "jev", decisionMode: "level" })).toEqual(['decisionMode "level" requires decisionLevels']);
     expect(issuesFor({ strategy: "failover", decisionMode: "level", decisionLevels: twoLevels, decisionFallbackLevel: "hard" })).toEqual([
@@ -360,10 +362,10 @@ describe("level-mode combo fields", () => {
       "decisionLevels.deep.candidates must be an array of 1 to 32 candidates",
     ]);
     expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { candidates: [{ provider: "c", model: "m3" }] } } })).toEqual([
-      "decisionLevels.deep.candidates[0] must name one of the combo targets by provider and model",
+      `decisionLevels.deep.candidates[0] must name one of the combo targets by provider and model${fix}`,
     ]);
     expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { candidates: [{ provider: "a", model: "m1", effort: "xhigh" }] } } })).toEqual([
-      'decisionLevels.deep.candidates[0].effort "xhigh" is not in the reasoningEfforts of target "a/m1"',
+      `decisionLevels.deep.candidates[0].effort "xhigh" is not in the reasoningEfforts of target "a/m1"${fix}`,
     ]);
     expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { candidates: [{ provider: "b", model: "m2", effort: "huge" }] } } })).toEqual([
       "decisionLevels.deep.candidates[0].effort must be one of: low, medium, high, xhigh, max, ultra",
@@ -380,6 +382,11 @@ describe("level-mode combo fields", () => {
     expect(issuesFor({ strategy: "jev", decisionLevels: twoLevels, decisionFallbackLevel: "deep" })).toEqual([
       'decisionFallbackLevel "deep" is not configured in decisionLevels',
     ]);
+    for (const decisionLevels of [undefined, null]) {
+      expect(issuesFor({ strategy: "jev", decisionLevels, decisionFallbackLevel: "routine" })).toEqual([
+        "decisionFallbackLevel requires decisionLevels",
+      ]);
+    }
   });
 
   test("normalizes sparsely: route is omission, levels keep canonical order and trimmed identity", () => {
@@ -450,6 +457,22 @@ describe("level-mode combo fields", () => {
       const cleared = await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevels: null } });
       expect(cleared.status).toBe(400);
       expect(await cleared.json()).toEqual({ error: 'decisionMode "level" requires decisionLevels' });
+
+      // Removing a target that a level names is refused with the fix, not silently dropped.
+      const stale = await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets: [targets[0]] } });
+      expect(stale.status).toBe(400);
+      expect((await stale.json() as { error: string }).error).toContain("ocx combo set auto --decision-levels");
+      // Clearing the levels (and the mode) drops the stored fallback level with them.
+      expect((await api(cfg, "PUT", {
+        id: "auto", combo: { strategy: "jev", targets: [targets[0]], decisionMode: null, decisionLevels: null },
+      })).status).toBe(200);
+      for (const field of ["decisionMode", "decisionLevels", "decisionFallbackLevel"]) {
+        expect(cfg.combos?.auto).not.toHaveProperty(field);
+      }
+      await api(cfg, "PUT", {
+        id: "auto",
+        combo: { strategy: "jev", targets, decisionMode: "level", decisionLevels: twoLevels, decisionFallbackLevel: "trivial" },
+      });
 
       expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "failover", targets } })).status).toBe(200);
       for (const field of ["decisionMode", "decisionLevels", "decisionFallbackLevel"]) {

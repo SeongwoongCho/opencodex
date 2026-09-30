@@ -251,9 +251,13 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         && requestedCombo.strategy === "jev"
         ? { decisionLevels: previous.decisionLevels }
         : {}),
+      // A fallback level means nothing without levels: clearing them drops a carried fallback.
       ...(!Object.hasOwn(requestedCombo, "decisionFallbackLevel")
         && previous?.decisionFallbackLevel !== undefined
         && requestedCombo.strategy === "jev"
+        && (Object.hasOwn(requestedCombo, "decisionLevels")
+          ? requestedCombo.decisionLevels !== null && requestedCombo.decisionLevels !== undefined
+          : previous.decisionLevels !== undefined)
         ? { decisionFallbackLevel: previous.decisionFallbackLevel }
         : {}),
     };

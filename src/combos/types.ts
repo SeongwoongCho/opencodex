@@ -343,7 +343,7 @@ export function comboConfigIssues(
       issues.push({ path: ["decisionQuotaSignals"], message: 'decisionQuotaSignals is only valid with strategy "jev"' });
     }
   }
-  issues.push(...jevLevelConfigIssues(body));
+  issues.push(...jevLevelConfigIssues(body, id));
 
   if (!Array.isArray(body.targets) || body.targets.length === 0) {
     issues.push({ path: ["targets"], message: "targets must be a non-empty array" });

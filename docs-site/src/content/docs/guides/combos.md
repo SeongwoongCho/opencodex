@@ -351,9 +351,12 @@ decision request is byte-for-byte what it was before.
 - The quota comes from the cached provider quota rows that `ocx provider quota` and the dashboard
   **Providers** page show, read without any network call: for a ChatGPT/Codex account pool the pool
   aggregate (or the effective account when there is no aggregate), for other OAuth providers the
-  active account, for key providers the active key. OpenCodex never probes quota for a decision, so
-  the data exists only while something keeps those rows fresh (the Providers page, `ocx provider
-  quota`, or the quota reset poller when quota reset notifications are on).
+  active account, for key providers the active key. That is the provider's displayed row, not the
+  account a particular request would be routed to within a pool or key set. OpenCodex never probes
+  quota for a decision itself. While any quota-aware JEV Combo exists, the running proxy refreshes
+  those rows in the background every 12 to 15 minutes with the same refresh the Providers page
+  triggers, which probes every configured provider; the Providers page, `ocx provider quota`, and the
+  quota reset poller refresh them too.
 - Per target, the worst relevant window counts: 5-hour, weekly and monthly meters, plus a
   model-family window (such as Anthropic's Fable weekly window) when the model belongs to that
   family. Other custom meters and credit balances are ignored. Rows older than 30 minutes, windows
@@ -434,18 +437,23 @@ next lower effort the target supports.
 - **Quota-aware selection.** With `decisionQuotaSignals: true`, the same cached quota tiers decide
   within the level: the first candidate that is healthy or has no fresh quota data, else the first
   limited one, and a nearly exhausted candidate only when nothing else in the level is usable. No
-  quota text is sent to the decision service in level mode. While such a Combo exists, the running
-  proxy refreshes the cached quota rows in the background about every five minutes (the same refresh
-  the Providers page triggers), so the tiers stay fresh without the dashboard open.
+  quota text is sent to the decision service in level mode. The background refresh described under
+  [Quota-aware decisions](#quota-aware-decisions) keeps the tiers fresh without the dashboard open.
 - **Fallbacks.** A decision that fails (no key, timeout, error, malformed or unknown answer) fails open
   to the first eligible target, as in route mode. A classified level with no usable candidate tries
-  `decisionFallbackLevel` (default `routine`), then fails open.
+  `decisionFallbackLevel` (default `routine`; it must be one of the configured levels and is refused
+  without `decisionLevels`), then fails open.
 - **Logs.** The JEV decision record adds `level` and `levelPath` (`chosen`, `fallback_level`, or
   `fail_open`), plus the quota tier summary over the candidates that were weighed.
 - **Switching modes** keeps `decisionLevels`, so you can try level mode and go back. The dashboard's
   **Decision mode** selector only switches the mode and shows the levels read-only; edit the levels in
   the config file, with `ocx combo set <id> --strategy jev --decision-levels '<json>'`, or through the
-  management API.
+  management API. If you remove or replace a target that a level still names, saving is refused with
+  that fix; the dashboard warns about such candidates before you save and, in route mode, offers
+  **Clear stored levels**. Switching the Combo to another strategy discards its levels, and the
+  dashboard warns before that save.
+- **Level descriptions are sent** to the decision service with every level-mode decision, like target
+  notes. Keep secrets, account details, and private paths out of them.
 - The level question is a plain choice question with string criteria, so it has the same shape for a
   self-hosted service and for canonical TypeSafe; it has been measured only against self-hosted `tev1`.
 
@@ -800,7 +808,7 @@ Combos are stored in the top-level `combos` object, keyed by combo id:
 | `decisionQuotaSignals` | No | `false` | JEV only. Send each target's cached remaining-quota tier with the decision; see [Quota-aware decisions](#quota-aware-decisions). |
 | `decisionMode` | No | `"route"` | JEV only. `"route"` asks the decision model for a target and effort; `"level"` asks only for a demand level and selects from `decisionLevels`; see [Level mode](#level-mode). |
 | `decisionLevels` | With `decisionMode: "level"` | none | JEV only. At least two of `trivial`, `routine`, `hard`, `deep`, `agentic_heavy`, `agentic_light`, each `{ description?, candidates: [{ provider, model, effort? }] }` (1–32 candidates naming Combo targets and allowed efforts). Kept in route mode. |
-| `decisionFallbackLevel` | No | `"routine"` | JEV only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`. |
+| `decisionFallbackLevel` | No | `"routine"` | JEV only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`, and is refused without them. |
 
 ## Troubleshooting
 
