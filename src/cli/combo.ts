@@ -18,6 +18,8 @@ const USAGE = `Usage:
       [--effort <low|medium|high|xhigh|max|ultra|->] [--effort-mode <fallback|force>]
       (force overrides valid client effort and can increase cost/latency) [--alias <name|->]
       [--native-alias] [--display-name <label|->]
+      [--decision-provider <provider|->] [--decision-timeout <1000-120000 ms|->]
+      (jev only; the provider must be a configured jev-decision row)
       [--rename-from <id>] [--json]
   ocx combo remove <id> --yes [--json]`;
 
@@ -88,6 +90,22 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   const alias = takeOption(args, "--alias");
   const nativeAlias = takeFlag(args, "--native-alias");
   const displayName = takeOption(args, "--display-name");
+  const decisionProvider = takeOption(args, "--decision-provider");
+  if (decisionProvider !== undefined && decisionProvider !== "-" && strategy !== "jev") {
+    throw new CliUsageError("--decision-provider applies only to the jev strategy", USAGE);
+  }
+  const decisionTimeout = takeOption(args, "--decision-timeout");
+  let decisionTimeoutMs: number | null | undefined;
+  if (decisionTimeout !== undefined) {
+    decisionTimeoutMs = decisionTimeout === "-" ? null : Number(decisionTimeout);
+    if (decisionTimeoutMs !== null
+      && (!Number.isInteger(decisionTimeoutMs) || decisionTimeoutMs < 1_000 || decisionTimeoutMs > 120_000)) {
+      throw new CliUsageError("--decision-timeout must be an integer from 1000 to 120000, or -", USAGE);
+    }
+    if (decisionTimeoutMs !== null && strategy !== "jev") {
+      throw new CliUsageError("--decision-timeout applies only to the jev strategy", USAGE);
+    }
+  }
   const renameFrom = takeOption(args, "--rename-from");
   rejectArgs(args, USAGE);
   const combo: Record<string, unknown> = {
@@ -100,6 +118,8 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (alias !== undefined) combo.alias = alias === "-" ? "" : alias;
   if (nativeAlias) combo.nativeAlias = true;
   if (displayName !== undefined) combo.displayName = displayName === "-" ? "" : displayName;
+  if (decisionProvider !== undefined) combo.decisionProvider = decisionProvider === "-" ? null : decisionProvider;
+  if (decisionTimeoutMs !== undefined) combo.decisionTimeoutMs = decisionTimeoutMs;
   const current = await runtimeRequest<{ combos?: ComboRow[] }>("/api/combos", {}, deps);
   const existing = (current.combos ?? []).find(row => row.id === (renameFrom ?? id));
   if (existing?.imageInput === "disabled") combo.imageInput = "disabled";

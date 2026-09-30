@@ -30,6 +30,26 @@ export interface ProviderOutboundDependencies {
   isCanonicalUrl?: (name: string, url: string) => boolean;
   /** Recheck caller-owned credential authority after DNS and immediately before transport. */
   beforeSend?: () => boolean;
+  /**
+   * Caller opt-in for a cleartext `http:` POST to a self-hosted service. It is honoured only
+   * when the URL literal is loopback, `localhost`, or a private address AND the provider row
+   * itself allows private networks (`allowPrivateNetwork` or a local-by-definition registry
+   * entry) — the same rule `providerSecureTransportConfigError` applies to local relays. Every
+   * public or hostname destination keeps the HTTPS-only POST gate. Defaults to refusing.
+   */
+  allowLocalCleartextPost?: boolean;
+}
+
+function localCleartextPostAllowed(
+  name: string,
+  provider: ProviderOutboundConfig,
+  url: URL,
+  dependencies: ProviderOutboundDependencies,
+): boolean {
+  if (dependencies.allowLocalCleartextPost !== true || url.protocol !== "http:") return false;
+  const kind = assessUrlDestination(url.toString())?.kind;
+  return (kind === "loopback" || kind === "localhost" || kind === "private")
+    && providerAllowsPrivateNetwork(name, provider);
 }
 
 export class ProviderOutboundPolicyError extends Error {
@@ -167,7 +187,8 @@ async function providerOutboundRequest(
     if (dependencies.beforeSend?.() === false) throw new ProviderOutboundSendCancelledError("provider credential changed before send");
   };
   const postUrl = method === "POST" ? new URL(url) : undefined;
-  if (postUrl?.protocol !== undefined && postUrl.protocol !== "https:") {
+  if (postUrl?.protocol !== undefined && postUrl.protocol !== "https:"
+    && !localCleartextPostAllowed(name, provider, postUrl, dependencies)) {
     throw new ProviderOutboundPolicyError("provider POST URL must use HTTPS");
   }
   // A provider entry keeps unknown configuration keys, so `fetch` can arrive as a value the

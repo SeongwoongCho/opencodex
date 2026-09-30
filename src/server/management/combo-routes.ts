@@ -221,6 +221,18 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
       ...(!Object.hasOwn(requestedCombo, "defaultEffortMode") && previous?.defaultEffortMode !== undefined
         ? { defaultEffortMode: previous.defaultEffortMode }
         : {}),
+      // The dashboard has no decision-service control either, so a round-trip of a JEV combo
+      // keeps it. Switching to another strategy drops it rather than failing validation.
+      ...(!Object.hasOwn(requestedCombo, "decisionProvider")
+        && previous?.decisionProvider !== undefined
+        && requestedCombo.strategy === "jev"
+        ? { decisionProvider: previous.decisionProvider }
+        : {}),
+      ...(!Object.hasOwn(requestedCombo, "decisionTimeoutMs")
+        && previous?.decisionTimeoutMs !== undefined
+        && requestedCombo.strategy === "jev"
+        ? { decisionTimeoutMs: previous.decisionTimeoutMs }
+        : {}),
     };
     const error = comboConfigError(id, effectiveCombo, config.providers, {
       requireEnabledTarget: true,

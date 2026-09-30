@@ -91,7 +91,7 @@ this rule, and uninstall keeps the [manifest validation and residual reporting c
 
 Cache invalidation reports an unchanged derived cache separately from a failed rewrite. `ocx sync-cache` treats identical bytes as a successful no-op, preserving the cache mtime and avoiding a needless app-server restart; malformed catalogs and write failures remain errors.
 
-`src/codex/catalog/model-visibility.ts` also excludes models owned by disabled providers, including custom rows. `src/codex/catalog/routed-gather.ts` does not inherit provider configuration into custom rows while that provider is disabled.
+`src/codex/catalog/model-visibility.ts` also excludes models owned by disabled providers, including custom rows. `src/codex/catalog/gather-capture.ts` leaves disabled providers and every `adapter: "jev-decision"` decision-service row out of the gather flight, so a decision row's `defaultModel` or `models` never becomes a routable catalog row and its endpoint is never probed for `/models`. `src/codex/catalog/routed-gather.ts` does not inherit provider configuration into custom rows while that provider is disabled.
 
 On the default `opencodex-catalog.json` path, sync deliberately uses two catalog sources: Codex's
 bundled catalog supplies a current native entry template, while the actual on-disk catalog supplies

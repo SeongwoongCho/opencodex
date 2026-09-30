@@ -6,7 +6,11 @@ import {
 import { resolveProviderApiKey } from "../providers/api-key-resolve";
 import { providerMatchesRegistryTransport } from "../providers/registry";
 import type { OcxComboDefaultEffort, OcxConfig, OcxProviderConfig } from "../types";
-import { JEV_MAX_CANDIDATE_FIELD_CHARS } from "./types";
+import {
+  JEV_DECISION_TIMEOUT_MAX_MS,
+  JEV_DECISION_TIMEOUT_MIN_MS,
+  JEV_MAX_CANDIDATE_FIELD_CHARS,
+} from "./types";
 
 export const JEV_PROVIDER_ID = "jev";
 export const JEV_API_URL = "https://api.typesafe.ai/v1/systemone";
@@ -18,6 +22,9 @@ const JEV_MAX_REQUEST_BYTES = 65_536;
 const JEV_MAX_RESPONSE_BYTES = 65_536;
 const JEV_OUTBOUND_DEPENDENCIES = {
   isCanonicalUrl: (name: string, url: string) => name === JEV_PROVIDER_ID && url === JEV_API_URL,
+  // Self-hosted decision models (Ollama tev1) listen on plain HTTP loopback. The outbound wrapper
+  // still requires the row's own allowPrivateNetwork and a literal local address for that.
+  allowLocalCleartextPost: true,
 };
 
 const TASK_CHARS = 500;
@@ -89,6 +96,13 @@ export interface ResolveJevDecisionOptions {
   candidates: readonly JevCandidate[];
   fallback: { targetKey: string; effort: OcxComboDefaultEffort | null };
   config: OcxConfig;
+  /**
+   * Decision service provider id. Omitted or `"jev"` keeps the canonical TypeSafe destination;
+   * any other id names a configured `jev-decision` row (for example a self-hosted Ollama `tev1`).
+   */
+  decisionProvider?: string;
+  /** Decision deadline; values outside 1000..120000 ms keep the four-second default. */
+  timeoutMs?: number;
   signal?: AbortSignal;
   post?: typeof providerOutboundPost;
   now?: () => number;
@@ -445,10 +459,29 @@ function modelProfile(candidate: JevCandidate): string {
     ?? "Configured target with capability unspecified by JEV; judge it only from the supplied request evidence.";
 }
 
-export function buildJevRouteQuestion(candidates: readonly JevCandidate[]): Record<string, unknown> {
-  const options = candidateOptions(candidates);
+function criterionDescription(criterion: JevRouteOption["criterion"]): string {
+  const effort = criterion.reasoning_effort
+    ? `${criterion.reasoning_effort} reasoning effort`
+    : "no reasoning-effort control";
+  return `Target ${criterion.target} (provider ${criterion.provider}, model ${criterion.model}) with ${effort}.`;
+}
+
+/**
+ * Build the single `route` choice question.
+ *
+ * TypeSafe receives each option's structured criterion object. `descriptiveCriteria` renders the
+ * same facts as one plain description string per option instead, the portable System One shape
+ * that self-hosted services such as Ollama require ("option keys to descriptions or null").
+ */
+export function buildJevRouteQuestion(
+  candidates: readonly JevCandidate[],
+  options: { descriptiveCriteria?: boolean } = {},
+): Record<string, unknown> {
+  const routeOptions = candidateOptions(candidates);
   const criteria: Record<string, unknown> = {};
-  for (const [choice, option] of options) criteria[choice] = option.criterion;
+  for (const [choice, option] of routeOptions) {
+    criteria[choice] = options.descriptiveCriteria ? criterionDescription(option.criterion) : option.criterion;
+  }
   const modelProfiles: Record<string, string> = {};
   for (const candidate of candidates) modelProfiles[candidate.key] = modelProfile(candidate);
   return {
@@ -549,8 +582,63 @@ function canonicalJevProvider(config: OcxConfig): OcxProviderConfig {
   };
 }
 
+interface JevDecisionEndpoint {
+  name: string;
+  provider: OcxProviderConfig;
+  url: string;
+  model: string;
+  apiKey: string | undefined;
+  /** Self-hosted System One services accept only string option descriptions. */
+  descriptiveCriteria: boolean;
+}
+
 /**
- * Ask TypeSafe JEV for one allowlisted target/effort decision.
+ * Resolve where one decision request goes and which credential it may carry.
+ *
+ * The `jev` id stays pinned to the canonical TypeSafe URL: its row key is used only while the row
+ * still matches the registry transport, and the environment fallbacks exist only for that URL. A
+ * retargeted `jev` row therefore keeps today's behavior instead of becoming a custom destination.
+ * Any other id must be a configured `jev-decision` row; its own baseUrl is the full endpoint and
+ * only its own key may accompany it, so no TypeSafe credential can reach a self-hosted service.
+ * `undefined` means no usable decision service (reported as `missing_key`).
+ */
+function jevDecisionEndpoint(config: OcxConfig, decisionProvider: string): JevDecisionEndpoint | undefined {
+  const configured = Object.hasOwn(config.providers, decisionProvider)
+    ? config.providers[decisionProvider]
+    : undefined;
+  if (configured?.disabled === true) return undefined;
+  if (decisionProvider === JEV_PROVIDER_ID) {
+    const configuredOwnsJev = configured
+      && providerMatchesRegistryTransport(JEV_PROVIDER_ID, configured);
+    const apiKey = (
+      configuredOwnsJev ? resolveProviderApiKey(configured.apiKey)?.trim() : undefined
+    ) || process.env.TYPESAFE_API_KEY?.trim()
+      || process.env.JEV_API_KEY?.trim();
+    if (!apiKey) return undefined;
+    return {
+      name: JEV_PROVIDER_ID,
+      provider: canonicalJevProvider(config),
+      url: JEV_API_URL,
+      model: (configuredOwnsJev ? configured.defaultModel?.trim() : undefined) || JEV_MODEL,
+      apiKey,
+      descriptiveCriteria: false,
+    };
+  }
+  if (configured?.adapter !== "jev-decision" || typeof configured.baseUrl !== "string") return undefined;
+  const url = configured.baseUrl.trim().replace(/\/+$/, "");
+  if (!url) return undefined;
+  return {
+    name: decisionProvider,
+    provider: configured,
+    url,
+    model: configured.defaultModel?.trim() || configured.models?.[0]?.trim() || JEV_MODEL,
+    apiKey: resolveProviderApiKey(configured.apiKey)?.trim() || undefined,
+    descriptiveCriteria: true,
+  };
+}
+
+/**
+ * Ask the configured JEV decision service for one allowlisted target/effort decision.
  *
  * Every operational or response failure returns the supplied first-eligible fallback. A caller
  * abort is the exception: request cancellation remains cancellation and is rethrown by identity.
@@ -565,31 +653,30 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
   if (options.candidates.length === 0) return failed("no_choices");
   if (!candidatesFitRequestBounds(options.candidates)) return failed("invalid");
 
-  const configured = options.config.providers[JEV_PROVIDER_ID];
-  if (configured?.disabled === true) return failed("missing_key");
-  const configuredOwnsJev = configured
-    && providerMatchesRegistryTransport(JEV_PROVIDER_ID, configured);
-  const apiKey = (
-    configuredOwnsJev ? resolveProviderApiKey(configured.apiKey)?.trim() : undefined
-  ) || process.env.TYPESAFE_API_KEY?.trim()
-    || process.env.JEV_API_KEY?.trim();
-  if (!apiKey) return failed("missing_key");
+  const endpoint = jevDecisionEndpoint(options.config, options.decisionProvider ?? JEV_PROVIDER_ID);
+  if (!endpoint) return failed("missing_key");
 
   let requestBody: string;
   try {
     const state = buildJevState(options.body, options.candidates);
     if (!hasJevDecisionState(state)) return failed("no_state");
     requestBody = JSON.stringify({
-      model: JEV_MODEL,
+      model: endpoint.model,
       state,
-      questions: buildJevRouteQuestion(options.candidates),
+      questions: buildJevRouteQuestion(options.candidates, { descriptiveCriteria: endpoint.descriptiveCriteria }),
     });
     if (new TextEncoder().encode(requestBody).byteLength > JEV_MAX_REQUEST_BYTES) return failed("invalid");
   } catch {
     return failed("invalid");
   }
 
-  const timeoutSignal = AbortSignal.timeout(JEV_TIMEOUT_MS);
+  const timeoutMs = options.timeoutMs !== undefined
+    && Number.isInteger(options.timeoutMs)
+    && options.timeoutMs >= JEV_DECISION_TIMEOUT_MIN_MS
+    && options.timeoutMs <= JEV_DECISION_TIMEOUT_MAX_MS
+    ? options.timeoutMs
+    : JEV_TIMEOUT_MS;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeoutSignal])
     : timeoutSignal;
@@ -597,12 +684,12 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
 
   try {
     const response = await post(
-      JEV_PROVIDER_ID,
-      canonicalJevProvider(options.config),
-      JEV_API_URL,
+      endpoint.name,
+      endpoint.provider,
+      endpoint.url,
       {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          ...(endpoint.apiKey ? { Authorization: `Bearer ${endpoint.apiKey}` } : {}),
           "Content-Type": "application/json",
         },
         body: requestBody,
@@ -612,7 +699,7 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
     );
     if (options.signal?.aborted) throw options.signal.reason;
 
-    const redirectError = await providerRedirectError(response, JEV_API_URL);
+    const redirectError = await providerRedirectError(response, endpoint.url);
     if (redirectError) return failed("redirect");
     if (!response.ok) {
       try { void response.body?.cancel().catch(() => undefined); } catch { /* best effort */ }
@@ -654,4 +741,50 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
     }
     return failed("network");
   }
+}
+
+export type JevDecisionProbeResult =
+  | { ok: true; latencyMs: number; message: string }
+  | { ok: false; latencyMs: number; error: string };
+
+/**
+ * Management connection test for one `jev-decision` provider row. It sends a fixed probe task and
+ * no user prompt, and reports only a sanitized gate. Canonical TypeSafe wording is kept for `jev`.
+ */
+export async function probeJevDecisionProvider(
+  config: OcxConfig,
+  name: string,
+  options: Pick<ResolveJevDecisionOptions, "signal" | "post"> = {},
+): Promise<JevDecisionProbeResult> {
+  const canonical = name === JEV_PROVIDER_ID;
+  const label = canonical ? "TypeSafe JEV" : "JEV decision service";
+  const probe = { targetKey: "jev/probe", effort: null } as const;
+  const decision = await resolveJevDecision({
+    body: {
+      input: canonical
+        ? "Verify the configured TypeSafe JEV decision service."
+        : "Verify the configured JEV decision service.",
+    },
+    candidates: [{
+      key: probe.targetKey,
+      provider: "jev",
+      model: "jev-latest",
+      // Self-hosted System One choice questions need at least two options.
+      reasoningEfforts: canonical ? [] : ["low", "high"],
+    }],
+    fallback: probe,
+    config,
+    decisionProvider: name,
+    ...options,
+  });
+  if (decision.gate === "apply") {
+    return { ok: true, latencyMs: decision.latencyMs, message: `Connected. ${label} answered a decision probe.` };
+  }
+  return {
+    ok: false,
+    latencyMs: decision.latencyMs,
+    error: decision.gate === "missing_key"
+      ? (canonical ? "TypeSafe JEV API key is not configured" : "JEV decision service is not configured")
+      : `${canonical ? "TypeSafe JEV decision probe" : "JEV decision service probe"} failed (${decision.gate})`,
+  };
 }

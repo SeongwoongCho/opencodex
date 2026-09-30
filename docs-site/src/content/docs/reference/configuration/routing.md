@@ -146,6 +146,8 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `alias?` | `string` | — | Optional public model id in place of the canonical picker slug. |
 | `nativeAlias?` | `boolean` | `false` | Let a currently supported bare native id take precedence only for that unqualified id. Bare `gpt-5.6-*` ids use Codex Pool/Direct credentials. Account-qualified routes remain distinct. Provider-qualified routes such as `openai-apikey/gpt-5.6-*` use their configured API-key route and never fall through to the native alias. |
 | `displayName?` | `string` | — | Display-only catalog label, required and non-empty for a native alias. |
+| `decisionProvider?` | `string` | `"jev"` | `strategy: "jev"` only. `"jev"` is the TypeSafe decision service (valid without a provider row); any other value must name a configured provider with `adapter: "jev-decision"`. |
+| `decisionTimeoutMs?` | `number` | `4000` | `strategy: "jev"` only. Decision deadline before failing open, 1000–120000 ms. |
 
 ```json
 {
@@ -167,13 +169,53 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 For strategy behavior, retryable failures, cooldowns, encrypted v2 task limits, and management
 commands, see [Combos](/guides/combos/).
 
-The `jev` strategy is optional and requires the canonical `jev` provider credential. That provider
+The `jev` strategy is optional and, unless `decisionProvider` names a self-hosted decision service,
+requires the canonical `jev` provider credential. That provider
 is a decision service, publishes no directly routable model, and cannot be a Combo target. JEV sees
 only currently eligible members of `targets`; missing, failed, or invalid decisions use the first
 eligible member, while caller cancellation remains terminal. Adding the provider or Combo never
 changes `defaultProvider` or hides direct model rows. See
 [JEV: decision-guided first pick](/guides/combos/#jev-decision-guided-first-pick) for setup, privacy
 bounds, and the one-decision-per-call contract.
+
+### Self-hosted decision model (e.g. Ollama tev1)
+
+`decisionProvider` can point a JEV Combo at a self-hosted Jev-API-compatible decision model such as
+Ollama's `tev1` (Ollama 0.35+, `POST /v1/systemone`, no API key):
+
+```json
+{
+  "providers": {
+    "ollama-tev1": {
+      "adapter": "jev-decision",
+      "baseUrl": "http://127.0.0.1:11434/v1/systemone",
+      "allowPrivateNetwork": true,
+      "defaultModel": "tev1:4b",
+      "liveModels": false
+    }
+  },
+  "combos": {
+    "jev-local": {
+      "strategy": "jev",
+      "decisionProvider": "ollama-tev1",
+      "decisionTimeoutMs": 60000,
+      "targets": [
+        { "provider": "openai", "model": "gpt-5.6-sol" },
+        { "provider": "openai", "model": "gpt-5.6-luna" }
+      ]
+    }
+  }
+}
+```
+
+The row's `baseUrl` is the full decision endpoint; its model is `defaultModel`, else `models[0]`,
+else `jev-latest`. Loopback needs the row's own `allowPrivateNetwork: true`, and plain `http:` is
+accepted only for such a local literal address. Only the row's own `apiKey` is sent — none when it is
+unset — and TypeSafe credentials never reach it. Options are sent as description strings, which
+Ollama requires. `tev1` was trained on 2–24 options, so keep target × effort pairs at 24 or fewer;
+its effective context is about 2k tokens and OpenCodex clips the task text to 500 characters. Keep the
+model resident (`OLLAMA_KEEP_ALIVE=-1`) and raise `decisionTimeoutMs` for slow services; see
+[Self-hosted decision model](/guides/combos/#self-hosted-decision-model-eg-ollama-tev1).
 
 ## Routing policy profiles (`config.routingProfiles`)
 

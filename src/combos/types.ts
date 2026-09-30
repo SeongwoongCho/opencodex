@@ -5,6 +5,10 @@ import { COMBO_NAMESPACE, isValidComboId, targetKey } from "./identifiers";
 
 export const COMBO_DEFAULT_WAIT_FOR_COOLDOWN_MS = 0;
 export const JEV_MAX_CANDIDATE_FIELD_CHARS = 512;
+export const JEV_DECISION_TIMEOUT_MIN_MS = 1_000;
+export const JEV_DECISION_TIMEOUT_MAX_MS = 120_000;
+/** Canonical TypeSafe decision service; valid as `decisionProvider` even without a provider row. */
+const CANONICAL_JEV_DECISION_PROVIDER = "jev";
 export { COMBO_NAMESPACE, preservesPhysicalComboProvider, isNativeAliasCombo, targetKey, parseComboModelId, comboModelId, comboPublicModelId, comboDisabledModelId, comboDisabledModelSelectors, resolveComboId, isValidComboId } from "./identifiers";
 
 /**
@@ -52,6 +56,10 @@ export interface NormalizedComboConfig {
   nativeAlias: boolean;
   /** Display-only label for the catalog row, or null when unset. */
   displayName: string | null;
+  /** JEV decision service provider id; absent means the canonical `jev` service. */
+  decisionProvider?: string;
+  /** JEV decision deadline override; absent keeps the default four-second deadline. */
+  decisionTimeoutMs?: number;
   targets: NormalizedComboTarget[];
 }
 
@@ -256,6 +264,38 @@ export function comboConfigIssues(
   if (nativeAlias && (typeof body.displayName !== "string" || body.displayName.trim().length === 0)) {
     issues.push({ path: ["displayName"], message: "displayName is required for native aliases" });
   }
+  if (body.decisionProvider !== undefined && body.decisionProvider !== null) {
+    const decisionProvider = typeof body.decisionProvider === "string" ? body.decisionProvider.trim() : "";
+    if (!decisionProvider) {
+      issues.push({ path: ["decisionProvider"], message: "decisionProvider must be a non-empty provider name" });
+    } else if (body.strategy !== "jev") {
+      issues.push({ path: ["decisionProvider"], message: 'decisionProvider is only valid with strategy "jev"' });
+    } else if (!Object.hasOwn(providers, decisionProvider)) {
+      if (decisionProvider !== CANONICAL_JEV_DECISION_PROVIDER) {
+        issues.push({
+          path: ["decisionProvider"],
+          message: `decisionProvider "${decisionProvider}" is not configured`,
+        });
+      }
+    } else if (providers[decisionProvider]?.adapter !== "jev-decision") {
+      issues.push({
+        path: ["decisionProvider"],
+        message: `decisionProvider "${decisionProvider}" is not a decision service (adapter must be "jev-decision")`,
+      });
+    }
+  }
+  if (body.decisionTimeoutMs !== undefined && body.decisionTimeoutMs !== null) {
+    if (typeof body.decisionTimeoutMs !== "number" || !Number.isInteger(body.decisionTimeoutMs)
+      || body.decisionTimeoutMs < JEV_DECISION_TIMEOUT_MIN_MS
+      || body.decisionTimeoutMs > JEV_DECISION_TIMEOUT_MAX_MS) {
+      issues.push({
+        path: ["decisionTimeoutMs"],
+        message: `decisionTimeoutMs must be an integer from ${JEV_DECISION_TIMEOUT_MIN_MS} to ${JEV_DECISION_TIMEOUT_MAX_MS}`,
+      });
+    } else if (body.strategy !== "jev") {
+      issues.push({ path: ["decisionTimeoutMs"], message: 'decisionTimeoutMs is only valid with strategy "jev"' });
+    }
+  }
 
   if (!Array.isArray(body.targets) || body.targets.length === 0) {
     issues.push({ path: ["targets"], message: "targets must be a non-empty array" });
@@ -379,6 +419,7 @@ export function comboConfigError(
 export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig {
   const alias = typeof raw.alias === "string" ? raw.alias.trim() : "";
   const displayName = typeof raw.displayName === "string" ? raw.displayName.trim() : "";
+  const decisionProvider = typeof raw.decisionProvider === "string" ? raw.decisionProvider.trim() : "";
   const defaultEffort = typeof raw.defaultEffort === "string" && isCodexReasoningEffort(raw.defaultEffort)
     ? raw.defaultEffort
     : null;
@@ -395,6 +436,8 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
     alias: alias || null,
     nativeAlias: raw.nativeAlias === true,
     displayName: displayName || null,
+    ...(decisionProvider ? { decisionProvider } : {}),
+    ...(typeof raw.decisionTimeoutMs === "number" ? { decisionTimeoutMs: raw.decisionTimeoutMs } : {}),
     targets: raw.targets.map(target => ({
       provider: target.provider.trim(),
       model: target.model.trim(),
@@ -408,6 +451,16 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
       lastResort: target.lastResort === true,
     })),
   };
+}
+
+/**
+ * Whether removing `provider` would leave this stored combo invalid: a target uses it, or the
+ * combo names it as its JEV decision service. The canonical `jev` id stays valid without a row.
+ */
+export function comboDependsOnProvider(combo: OcxComboConfig, provider: string): boolean {
+  if (combo.targets.some(target => target.provider === provider)) return true;
+  const decisionProvider = typeof combo.decisionProvider === "string" ? combo.decisionProvider.trim() : "";
+  return decisionProvider === provider && provider !== CANONICAL_JEV_DECISION_PROVIDER;
 }
 
 export function comboDefaultEffort(

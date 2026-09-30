@@ -185,6 +185,11 @@ requests use the explicit tunnel fetch. Both retain NO_PROXY semantics. The wrap
 only a typed DNS-resolution failure degrades to proxy resolution; every literal, metadata, and
 resolved-address policy error still rejects. Proxy mode logs once that the proxy-selected peer
 cannot be pinned. Private destinations additionally require allowPrivateNetwork plus NO_PROXY.
+`providerOutboundPost` refuses every non-HTTPS URL before any executor or DNS work. The one exception
+is the caller opt-in `allowLocalCleartextPost`, used only by the self-hosted JEV decision client in
+`src/combos/jev.ts`: it admits `http:` solely when the URL literal is loopback, `localhost`, or a
+private address and the provider row allows private networks; public literals and hostnames keep the
+HTTPS-only gate.
 
 Every request through this wrapper is proxy-originated, so it fills a default
 `User-Agent: opencodex` when the request headers name no User-Agent of their own; registry

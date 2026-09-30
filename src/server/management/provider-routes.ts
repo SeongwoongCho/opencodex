@@ -74,7 +74,8 @@ import { clearAccountQuotaCache, clearProviderQuotaCache, fetchProviderQuotaRepo
 import { getCachedProviderRoutingQuota } from "../../providers/quota-routing-cache";
 import { PROVIDER_QUOTA_MAX_AGE_MS, type ProviderRoutingQuota } from "../../providers/quota-types";
 import { cachedProviderQuotaIsExhausted } from "../../combos/resolve";
-import { resolveJevDecision } from "../../combos/jev";
+import { probeJevDecisionProvider } from "../../combos/jev";
+import { comboDependsOnProvider } from "../../combos/types";
 import { clearKeyCooldowns, forgetApiKeyRotationCursor } from "../../providers/key-failover";
 import { providerRequestPacingStatus } from "../../providers/request-pacing";
 import { CODEX_FORWARD_BASE_URL, isCanonicalOpenAiForwardProvider } from "../../providers/openai-tiers";
@@ -245,7 +246,7 @@ function providerEditorCandidate(
 
   for (const name of removedProviders) {
     const dependentCombos = Object.entries(persisted.combos ?? {})
-      .filter(([, combo]) => combo.targets.some(target => target.provider === name))
+      .filter(([, combo]) => comboDependsOnProvider(combo, name))
       .map(([id]) => id)
       .sort((a, b) => a.localeCompare(b));
     if (dependentCombos.length > 0) {
@@ -1616,34 +1617,10 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
         message: "Passthrough provider is configured (forwards your Codex login; no upstream /models).",
       });
     }
-    if (name === "jev" && providerMatchesRegistryTransport(name, prov)) {
-      const probe = { targetKey: "jev/probe", effort: null } as const;
-      const decision = await resolveJevDecision({
-        body: { input: "Verify the configured TypeSafe JEV decision service." },
-        candidates: [{
-          key: probe.targetKey,
-          provider: "jev",
-          model: "jev-latest",
-          reasoningEfforts: [],
-        }],
-        fallback: probe,
-        config,
-        signal: req.signal,
-      });
-      if (decision.gate === "apply") {
-        return jsonResponse({
-          ok: true,
-          latencyMs: decision.latencyMs,
-          message: "Connected. TypeSafe JEV answered a decision probe.",
-        });
-      }
-      return jsonResponse({
-        ok: false,
-        latencyMs: decision.latencyMs,
-        error: decision.gate === "missing_key"
-          ? "TypeSafe JEV API key is not configured"
-          : `TypeSafe JEV decision probe failed (${decision.gate})`,
-      });
+    // Any decision-service row answers through the bounded JEV client. A retargeted `jev` row is
+    // not a decision destination (its credential stays pinned to TypeSafe), so it keeps the generic path.
+    if (prov.adapter === "jev-decision" && (name !== "jev" || providerMatchesRegistryTransport(name, prov))) {
+      return jsonResponse(await probeJevDecisionProvider(config, name, { signal: req.signal }));
     }
     if (prov.liveModels === false) {
       // A static catalog has no live discovery endpoint to test. This is neither
@@ -1845,7 +1822,7 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
       }, 409);
     }
     const dependentCombos = Object.entries(config.combos ?? {})
-      .filter(([, combo]) => combo.targets.some(target => target.provider === name))
+      .filter(([, combo]) => comboDependsOnProvider(combo, name))
       .map(([id]) => id)
       .sort((a, b) => a.localeCompare(b));
     if (dependentCombos.length > 0) {

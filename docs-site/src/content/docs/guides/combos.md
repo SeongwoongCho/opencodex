@@ -270,6 +270,67 @@ constrained by that target's advertised ladder. JEV is not asked again if the se
 retryable failure—the existing Combo cooldown and fallback loop continues through the remaining
 configured targets.
 
+#### Self-hosted decision model (e.g. Ollama tev1)
+
+A JEV Combo can ask a self-hosted, Jev-API-compatible decision model instead of TypeSafe. Ollama
+0.35 and later serves Together AI's open-weight `tev1` decision models at
+`POST /v1/systemone` with the same request and response shape and no API key. Add a provider row with
+`adapter: "jev-decision"` whose `baseUrl` is the **full** decision endpoint, then name it in the
+Combo's `decisionProvider`:
+
+```json
+{
+  "providers": {
+    "ollama-tev1": {
+      "adapter": "jev-decision",
+      "baseUrl": "http://127.0.0.1:11434/v1/systemone",
+      "allowPrivateNetwork": true,
+      "defaultModel": "tev1:4b",
+      "liveModels": false
+    }
+  },
+  "combos": {
+    "jev-local": {
+      "strategy": "jev",
+      "decisionProvider": "ollama-tev1",
+      "decisionTimeoutMs": 60000,
+      "reasoningEffortMode": "adaptive",
+      "targets": [
+        { "provider": "openai", "model": "gpt-6-astra" },
+        { "provider": "openai", "model": "gpt-5.6-sol" },
+        { "provider": "openai", "model": "gpt-5.6-luna" }
+      ]
+    }
+  }
+}
+```
+
+- The decision model is `defaultModel`, else the first `models` entry, else `jev-latest`. The row is
+  a decision service only: it is never published as a routable model and cannot be a Combo target.
+- A loopback or LAN endpoint needs `allowPrivateNetwork: true` on that row, exactly like any other
+  local provider. Plain `http:` is accepted only for such a local literal address; every other
+  destination must use HTTPS. Redirects still fail open.
+- Only the row's own `apiKey` is sent, and only when it is set; a keyless row sends no
+  `Authorization` header. `TYPESAFE_API_KEY`, `JEV_API_KEY`, and the `jev` row's key are never sent to
+  a self-hosted endpoint. The `jev` id itself always means the TypeSafe endpoint.
+- Self-hosted services receive each target/effort option as a plain description string (for
+  example `Target openai/gpt-5.6-sol (provider openai, model gpt-5.6-sol) with low reasoning
+  effort.`), because Ollama accepts only string or `null` option descriptions. TypeSafe keeps
+  receiving the structured option objects.
+- `tev1` was trained on 2–24 options, and Ollama accepts 2–26. Each target contributes one option per
+  offered reasoning effort, so keep the target × effort pairs at 24 or fewer (use per-target
+  `reasoningEfforts` to trim them). Its effective context is about 2k tokens; OpenCodex already clips
+  the task text to 500 characters.
+- A cold model load can take tens of seconds, and an aborted decision request makes Ollama abandon the
+  load. Pre-warm the model and keep it resident (`OLLAMA_KEEP_ALIVE=-1`, or `keep_alive`), and raise
+  `decisionTimeoutMs` (1000–120000 ms, default 4000) when the service is slower than four seconds.
+  Every timeout or error still fails open to the first eligible target.
+
+The provider's **Test connection** sends the same bounded probe decision to the self-hosted endpoint.
+From the CLI, use `ocx combo set <id> --strategy jev --decision-provider ollama-tev1
+--decision-timeout 60000 --targets ...`. The dashboard has no decision-service control yet; a
+dashboard save of an existing JEV Combo keeps its `decisionProvider` and `decisionTimeoutMs`.
+
 For each JEV target, **Models → Combos → Config** has an optional **Additional model notes for JEV**
 field (up to 512 characters; line breaks and tabs are allowed, other control characters are rejected). It is stored as `targets[].modelProfile` in the combo config. The
 built-in target profile remains in the trusted `instructions.model_profiles`; a non-empty note is
@@ -545,8 +606,9 @@ ocx combo remove <id> --yes
 ```
 
 `set` also accepts `--strategy`, `--sticky`, `--effort`, `--alias`, `--native-alias`,
-`--display-name`, and `--rename-from`. Use `-` as the value of `--effort`, `--alias`, or
-`--display-name` to clear that field. `--native-alias` requires a currently supported bare native
+`--display-name`, `--decision-provider`, `--decision-timeout`, and `--rename-from`. Use `-` as the
+value of `--effort`, `--alias`, `--display-name`, `--decision-provider`, or `--decision-timeout` to
+clear that field. The two decision flags apply only to `--strategy jev`. `--native-alias` requires a currently supported bare native
 model alias and a non-empty display name. `create` and `update` are aliases for `set`; `delete` is an alias for
 `remove`; and the same subcommands are available under `ocx route combo`.
 
@@ -562,7 +624,8 @@ the request-rate fallback. A stored `cooldownMs` can only be removed by editing 
 `waitForCooldownMs` resets to its default when a `PUT` explicitly sends `0`, because the sparse
 serializer omits that default. Omission preserves both values and the dashboard does not expose them yet.
 Omitting `defaultEffortMode`, `reasoningEffortMode`, `imageInput`, or `cooldownWaitPolicy` likewise
-keeps the stored value, and a re-sent target without `lastResort` keeps that target's flag (matched by
+keeps the stored value, as does omitting `decisionProvider` or `decisionTimeoutMs` while the request
+keeps `strategy: "jev"` (a different strategy drops them), and a re-sent target without `lastResort` keeps that target's flag (matched by
 provider and model). The dashboard always sends `imageInput` and `reasoningEffortMode`, so switching
 them back to `auto` or `strict` there still replaces the stored value.
 
@@ -606,6 +669,8 @@ Combos are stored in the top-level `combos` object, keyed by combo id:
 | `alias` | No | none | Optional trimmed public model id; use the alias rules above. An empty value is stored as no alias. |
 | `nativeAlias` | No | `false` | Explicitly permit a currently supported bare native `alias` to take routing and catalog precedence. Never inferred from the alias. |
 | `displayName` | No | none | Bounded display-only catalog label. Required and non-empty when `nativeAlias` is true. |
+| `decisionProvider` | No | `"jev"` | JEV only. Provider id of the decision service: `"jev"` (TypeSafe, valid without a provider row) or a configured `adapter: "jev-decision"` row such as a self-hosted Ollama `tev1`. |
+| `decisionTimeoutMs` | No | `4000` | JEV only. Integer from 1000 to 120000: the decision deadline before failing open to the first eligible target. |
 
 ## Troubleshooting
 

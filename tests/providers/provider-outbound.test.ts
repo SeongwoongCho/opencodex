@@ -628,6 +628,50 @@ describe("provider outbound POST transport", () => {
     )).rejects.toThrow(ProviderOutboundPolicyError);
     expect(calls).toBe(0);
   });
+
+  test("admits a cleartext POST only for an opted-in local destination the row allows", async () => {
+    for (const key of proxyKeys) delete process.env[key];
+    const { providerOutboundPost, ProviderOutboundPolicyError } = await import("../../src/lib/provider-outbound");
+    const localUrl = "http://127.0.0.1:11434/v1/systemone";
+    const body = JSON.stringify({ model: "tev1:4b" });
+    const optIn = (response: Response) => {
+      const direct = directDependencies(response, { privateNetwork: true, address: "127.0.0.1" });
+      return { ...direct, dependencies: { ...direct.dependencies, allowLocalCleartextPost: true } };
+    };
+
+    const admitted = optIn(new Response('{"answers":{}}', { status: 200 }));
+    const response = await providerOutboundPost(
+      "ollama-tev1",
+      { baseUrl: localUrl, allowPrivateNetwork: true },
+      localUrl,
+      { headers: { "content-type": "application/json" }, body },
+      admitted.dependencies,
+    );
+    expect(await response.json()).toEqual({ answers: {} });
+    expect(admitted.captured.address).toBe("127.0.0.1");
+    expect(admitted.captured.body).toBe(body);
+
+    const refusals: Array<{ provider: { baseUrl: string; allowPrivateNetwork?: boolean }; url: string; optedIn: boolean }> = [
+      // No caller opt-in: the HTTPS-only POST gate is unchanged.
+      { provider: { baseUrl: localUrl, allowPrivateNetwork: true }, url: localUrl, optedIn: false },
+      // Opt-in without the row's own private-network permission.
+      { provider: { baseUrl: localUrl }, url: localUrl, optedIn: true },
+      // Opt-in never extends cleartext to a public literal or a hostname.
+      { provider: { baseUrl: "http://93.184.216.34/v1", allowPrivateNetwork: true }, url: "http://93.184.216.34/v1/systemone", optedIn: true },
+      { provider: { baseUrl: "http://decider.example/v1", allowPrivateNetwork: true }, url: "http://decider.example/v1/systemone", optedIn: true },
+    ];
+    for (const refusal of refusals) {
+      const direct = directDependencies(new Response("{}"), { privateNetwork: true, address: "127.0.0.1" });
+      await expect(providerOutboundPost(
+        "ollama-tev1",
+        refusal.provider,
+        refusal.url,
+        { body },
+        { ...direct.dependencies, ...(refusal.optedIn ? { allowLocalCleartextPost: true } : {}) },
+      )).rejects.toThrow(ProviderOutboundPolicyError);
+      expect(direct.captured.body).toBeUndefined();
+    }
+  });
 });
 
 describe("#3462 Mihomo IPv6 fake-IP admission is gated on the scheme-matched proxy fetch will use", () => {

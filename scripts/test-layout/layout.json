@@ -939,6 +939,7 @@
     "key-login-live-update.test.ts": "oauth",
     "key-login-preserves-model-costs.test.ts": "oauth",
     "jev-decision.test.ts": "routing",
+    "jev-decision-provider-combo.test.ts": "routing",
     "jev-provider.test.ts": "providers",
     "keyring-smoke.test.ts": "ci-workflows",
     "kilo-client.test.ts": "clients",

@@ -538,6 +538,8 @@ export async function executeComboResponses(
         candidates: choices.map(choice => choice.candidate),
         fallback,
         config,
+        ...(combo.decisionProvider ? { decisionProvider: combo.decisionProvider } : {}),
+        ...(combo.decisionTimeoutMs !== undefined ? { timeoutMs: combo.decisionTimeoutMs } : {}),
         signal: options.abortSignal,
       });
     } catch (error) {

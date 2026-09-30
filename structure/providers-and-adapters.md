@@ -303,20 +303,27 @@ inference route: the registry marks it `credentialOnly`, its adapter is delibera
 routable adapter registry, live discovery is disabled, no default/static model is published, and
 key login returns unknown without probing a nonexistent model catalog. The normal `ocx login jev`
 flow and provider-workspace API-key panel both persist the same credential-only row. Combo validation
-rejects the decision provider as a target. `src/server/management/provider-routes.ts`
-special-cases its connection test through the same bounded decision client before the generic
-static-catalog branch. The test sends no user prompt and returns only sanitized health status.
+rejects every `jev-decision` row as a target; `src/codex/catalog/gather-capture.ts` never gathers one.
+`src/server/management/provider-routes.ts` tests those rows (not a retargeted `jev`) through
+`probeJevDecisionProvider` before the static-catalog branch, with no user prompt and sanitized status.
 
 The request path consumes a configured literal/reference key only when the row still matches the
 canonical registry transport, with `TYPESAFE_API_KEY` and the standard provider-derived
 `JEV_API_KEY` as explicit environment fallbacks. A same-named custom destination cannot receive
-either credential through the JEV client. All automated coverage mocks TypeSafe; live-key behavior
-remains an operator smoke boundary.
+either credential through the JEV client; a retargeted `jev` row is ignored, never a custom
+destination. All automated coverage mocks TypeSafe; live-key behavior is an operator smoke boundary.
+A Combo's `decisionProvider` selects the service: omitted or `"jev"` is that canonical path (a
+canonical row's `defaultModel` may replace `jev-latest`); any other id must be a `jev-decision` row
+whose `baseUrl` is the full endpoint, whose model is `defaultModel`/`models[0]`/`jev-latest`, and
+whose own `apiKey` alone is sent (none when unset). The row is the outbound provider config, so
+loopback needs its `allowPrivateNetwork`, and `allowLocalCleartextPost` admits `http:` only for a
+local literal. Options go out as description strings, as Ollama's System One endpoint requires.
+Unusable rows reuse the `missing_key` gate; `decisionTimeoutMs` (1000..120000) replaces the 4 s default.
 
 `src/combos/jev.ts` extracts bounded user-task, previous-assistant, and latest-tool-output text plus
 the tool name and boolean signals; raw image data, tool arguments, encrypted reasoning, headers, and
 the JEV credential are excluded. It owns the joint target/effort choice map, strict response
-validation, fixed `jev-latest` destination, four-second deadline, no-redirect policy, bounded response,
+validation, canonical `jev-latest` destination, default four-second deadline, no-redirect policy, bounded response,
 and caller-cancellation propagation. Missing credentials or safe state, transport failures, and invalid
 answers fail open to the first eligible target; no response can escape the configured choice map.
 Telemetry never retains extracted state or credentials.
