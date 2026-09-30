@@ -7,7 +7,6 @@ import {
   emptyDraft,
   intersectComboEfforts,
   validateComboDraft,
-  withComboStrategy,
 } from "../combo-workspace-data";
 import { IconX } from "../icons";
 import { useT } from "../i18n/shared";
@@ -15,7 +14,8 @@ import { Notice } from "../ui";
 import type { ModelOption, ProviderOption } from "./combo-workspace-types";
 import { ComboCapabilities, EffortSelect, JevDecisionFields, StrategySeg, TargetEditor } from "./combo-workspace-controls";
 import { COMBO_STRATEGY_HINT_KEYS, COMBO_TARGETS_HINT_KEYS } from "../combo-workspace-data";
-import { clampedNumberInput } from "./combo-workspace-utils";
+import { clampedNumberInput, comboDraftErrorText } from "./combo-workspace-utils";
+import type { JevDecisionRow } from "../jev-decision-service";
 
 export function AddComboModal({
   existingIds,
@@ -30,7 +30,7 @@ export function AddComboModal({
 }: {
   existingIds: string[];
   existingAliases: string[];
-  providerMap: Readonly<Record<string, { disabled?: boolean }>>;
+  providerMap: Readonly<Record<string, JevDecisionRow>>;
   providerQuotaStates: ProviderQuotaStates;
   providers: ProviderOption[];
   models: ModelOption[];
@@ -85,7 +85,7 @@ export function AddComboModal({
       providers: providerMap,
     });
     if (code) {
-      setError(t(`cws.err.${code}`));
+      setError(comboDraftErrorText(t, code, draft, providerMap));
       return;
     }
     setBusy(true);
@@ -175,7 +175,7 @@ export function AddComboModal({
             <StrategySeg
               value={draft.strategy}
               disabled={busy}
-              onChange={(strategy) => setDraft((d) => withComboStrategy(d, strategy))}
+              onChange={(strategy) => setDraft((d) => ({ ...d, strategy }))}
             />
             <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
               {t(COMBO_STRATEGY_HINT_KEYS[draft.strategy])}

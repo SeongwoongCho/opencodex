@@ -12,6 +12,7 @@ import { providerMatchesRegistryTransport } from "../providers/registry";
 import type { OcxComboDefaultEffort, OcxConfig, OcxProviderConfig } from "../types";
 import {
   isSystemOneEndpoint,
+  JEV_DECISION_TIMEOUT_DEFAULT_MS,
   JEV_DECISION_TIMEOUT_MAX_MS,
   JEV_DECISION_TIMEOUT_MIN_MS,
   JEV_MAX_CANDIDATE_FIELD_CHARS,
@@ -21,7 +22,6 @@ export const JEV_PROVIDER_ID = "jev";
 export const JEV_API_URL = "https://api.typesafe.ai/v1/systemone";
 export const JEV_MODEL = "jev-latest";
 
-const JEV_TIMEOUT_MS = 4_000;
 const JEV_MAX_CANDIDATES = 64;
 /** Ollama's System One choice questions accept 2..26 options; other services share the floor. */
 const SELF_HOSTED_MIN_OPTIONS = 2;
@@ -716,7 +716,7 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
     && options.timeoutMs >= JEV_DECISION_TIMEOUT_MIN_MS
     && options.timeoutMs <= JEV_DECISION_TIMEOUT_MAX_MS
     ? options.timeoutMs
-    : JEV_TIMEOUT_MS;
+    : JEV_DECISION_TIMEOUT_DEFAULT_MS;
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeoutSignal])

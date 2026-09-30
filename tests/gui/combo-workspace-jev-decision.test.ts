@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import {
+  JEV_DECISION_TIMEOUT_DEFAULT_MS as SERVER_TIMEOUT_DEFAULT_MS,
   JEV_DECISION_TIMEOUT_MAX_MS as SERVER_TIMEOUT_MAX_MS,
   JEV_DECISION_TIMEOUT_MIN_MS as SERVER_TIMEOUT_MIN_MS,
+  isSystemOneEndpoint,
 } from "../../src/combos/types";
 import {
-  type ComboItem,
+  JEV_DECISION_TIMEOUT_DEFAULT_MS,
   JEV_DECISION_TIMEOUT_MAX_MS,
   JEV_DECISION_TIMEOUT_MIN_MS,
+  canCreateJevAutoFrom,
+  jevDecisionRowIssue,
+} from "../../gui/src/jev-decision-service";
+import {
+  type ComboItem,
   draftEquals,
   jevAutoDraft,
   jevDecisionServiceOptions,
@@ -14,11 +21,9 @@ import {
   parseComboList,
   toPutBody,
   validateComboDraft,
-  withComboStrategy,
 } from "../../gui/src/combo-workspace-data";
 import {
   JEV_AUTO_CREATE_HASH,
-  canCreateJevAutoFrom,
   jevAutoCreateDecisionProvider,
   jevAutoCreateHash,
   resolveAppHashChange,
@@ -27,18 +32,21 @@ import {
 const providers = [
   { name: "a", adapter: "openai-chat", baseUrl: "https://a.example/v1" },
   { name: "jev", adapter: "jev-decision", baseUrl: "https://api.typesafe.ai/v1/systemone" },
-  { name: "tev-local", adapter: "jev-decision", baseUrl: "http://127.0.0.1:11434/v1/systemone" },
-  { name: "mytev", adapter: "jev-decision", baseUrl: "https://local.example/v1/systemone" },
+  { name: "tev-local", adapter: "jev-decision", baseUrl: "http://127.0.0.1:11434/v1/systemone", models: ["tev1:4b"] },
+  { name: "mytev", adapter: "jev-decision", baseUrl: "https://local.example/v1/systemone", defaultModel: "tev1:4b" },
 ];
+const providerMap = Object.fromEntries(providers.map(({ name, ...row }) => [name, row]));
 
 function parseOne(row: Record<string, unknown>): ComboItem {
   return parseComboList({ combos: [{ id: "tev-auto", targets: [{ provider: "a", model: "m1" }], ...row }] })[0]!;
 }
 
 describe("JEV decision service in the combo workspace", () => {
-  test("GUI timeout bounds mirror the server constants", () => {
+  test("GUI timeout bounds and default are the server constants", () => {
     expect(JEV_DECISION_TIMEOUT_MIN_MS).toBe(SERVER_TIMEOUT_MIN_MS);
     expect(JEV_DECISION_TIMEOUT_MAX_MS).toBe(SERVER_TIMEOUT_MAX_MS);
+    expect(JEV_DECISION_TIMEOUT_DEFAULT_MS).toBe(SERVER_TIMEOUT_DEFAULT_MS);
+    expect(SERVER_TIMEOUT_DEFAULT_MS).toBe(4000);
   });
 
   test("parse and PUT round-trip decisionProvider and decisionTimeoutMs", () => {
@@ -79,19 +87,20 @@ describe("JEV decision service in the combo workspace", () => {
     expect(draftEquals(legacy, cleared)).toBe(true);
   });
 
-  test("switching away from jev clears both fields in the draft and the payload", () => {
+  test("a jev -> other -> jev round trip keeps the draft's fields; only JEV sends them", () => {
     const jev = parseOne({ strategy: "jev", decisionProvider: "mytev", decisionTimeoutMs: 30000 });
-    const failover = withComboStrategy(jev, "failover");
-    expect(failover.decisionProvider).toBeNull();
-    expect(failover.decisionTimeoutMs).toBeNull();
+    const failover: ComboItem = { ...jev, strategy: "failover" };
     const body = toPutBody(failover).combo;
     expect(Object.hasOwn(body, "decisionProvider")).toBe(false);
     expect(Object.hasOwn(body, "decisionTimeoutMs")).toBe(false);
-    // Even a stale draft value never reaches the wire for a non-JEV strategy.
-    expect(Object.hasOwn(toPutBody({ ...jev, strategy: "round-robin" }).combo, "decisionProvider")).toBe(false);
-    // Switching back to jev keeps the (cleared) fields rather than resurrecting old ones.
-    expect(withComboStrategy(failover, "jev").decisionProvider).toBeNull();
-    expect(withComboStrategy(jev, "jev")).toEqual(jev);
+    // A kept value is invisible outside JEV: it neither dirties the draft nor fails validation.
+    expect(draftEquals(failover, { ...failover, decisionProvider: null, decisionTimeoutMs: null })).toBe(true);
+    expect(validateComboDraft({ ...failover, decisionProvider: "gone", decisionTimeoutMs: 5 }, {
+      existingIds: [], isCreate: false, providers: { a: {} },
+    })).toBeNull();
+    const back: ComboItem = { ...failover, strategy: "jev" };
+    expect(draftEquals(back, jev)).toBe(true);
+    expect(toPutBody(back).combo).toMatchObject({ decisionProvider: "mytev", decisionTimeoutMs: 30000 });
   });
 
   test("timeout validation follows the server bounds and applies only to jev", () => {
@@ -116,9 +125,42 @@ describe("JEV decision service in the combo workspace", () => {
       { id: "mytev", baseUrl: "https://local.example/v1/systemone" },
       { id: "tev-local", baseUrl: "http://127.0.0.1:11434/v1/systemone" },
     ]);
-    // A stored id with no matching row stays selectable instead of being silently rewritten.
-    expect(jevDecisionServiceOptions(providers, "gone").at(-1)).toEqual({ id: "gone", missing: true });
+    // A stored id that is not a decision row stays listed, with why, instead of being rewritten.
+    expect(jevDecisionServiceOptions(providers, "gone").at(-1)).toEqual({ id: "gone", issue: "missing" });
+    expect(jevDecisionServiceOptions(providers, "a").at(-1)).toEqual({ id: "a", issue: "notDecision" });
     expect(jevDecisionServiceOptions(providers, "jev")).toHaveLength(3);
+  });
+
+  test("rows the server rejects or the runtime skips are annotated with a reason", () => {
+    const bad = [
+      { name: "off", adapter: "jev-decision", baseUrl: "http://127.0.0.1:1/v1/systemone", defaultModel: "m", disabled: true },
+      { name: "path", adapter: "jev-decision", baseUrl: "http://127.0.0.1:1/v1", defaultModel: "m" },
+      { name: "nomodel", adapter: "jev-decision", baseUrl: "http://127.0.0.1:1/v1/systemone", models: [" "] },
+    ];
+    expect(jevDecisionServiceOptions(bad).map(option => [option.id, option.issue])).toEqual([
+      [null, undefined],
+      ["nomodel", "model"],
+      ["off", "disabled"],
+      ["path", "endpoint"],
+    ]);
+    expect(jevDecisionRowIssue(undefined)).toBe("missing");
+    expect(jevDecisionRowIssue({ adapter: "openai-chat" })).toBe("notDecision");
+
+    const jev = parseOne({ strategy: "jev" });
+    const map = { ...providerMap, ...Object.fromEntries(bad.map(({ name, ...row }) => [name, row])) };
+    const validate = (decisionProvider: string | null) => validateComboDraft({ ...jev, decisionProvider }, {
+      existingIds: [], isCreate: false, providers: map,
+    });
+    expect(validate(null)).toBeNull();
+    expect(validate("mytev")).toBeNull();
+    for (const id of ["off", "path", "nomodel", "a", "gone"]) expect(validate(id)).toBe("invalidDecisionProvider");
+  });
+
+  test("the GUI endpoint check is the server's", () => {
+    for (const url of ["http://h/v1/systemone", "http://h/v1/systemone/", "http://h/v1", "not a url", ""]) {
+      expect(jevDecisionRowIssue({ adapter: "jev-decision", baseUrl: url, defaultModel: "m" }) === null)
+        .toBe(isSystemOneEndpoint(url));
+    }
   });
 
   test("the read-only summary names the service, its endpoint and timeout", () => {
@@ -143,7 +185,12 @@ describe("JEV decision service in the combo workspace", () => {
   test("Create JEV Auto: key required for canonical jev only, and the deep link carries the row", () => {
     expect(canCreateJevAutoFrom({ name: "jev", adapter: "jev-decision", hasApiKey: true })).toBe(true);
     expect(canCreateJevAutoFrom({ name: "jev", adapter: "jev-decision", hasApiKey: false })).toBe(false);
-    expect(canCreateJevAutoFrom({ name: "tev-local", adapter: "jev-decision", hasApiKey: false })).toBe(true);
+    expect(canCreateJevAutoFrom({ name: "jev", adapter: "jev-decision", hasApiKey: true, disabled: true })).toBe(false);
+    const tev = { name: "tev-local", adapter: "jev-decision", baseUrl: "http://127.0.0.1:11434/v1/systemone", defaultModel: "tev1:4b" };
+    expect(canCreateJevAutoFrom({ ...tev, hasApiKey: false })).toBe(true);
+    expect(canCreateJevAutoFrom({ ...tev, disabled: true })).toBe(false);
+    expect(canCreateJevAutoFrom({ ...tev, baseUrl: "http://127.0.0.1:11434/v1" })).toBe(false);
+    expect(canCreateJevAutoFrom({ ...tev, defaultModel: undefined })).toBe(false);
     expect(canCreateJevAutoFrom({ name: "a", adapter: "openai-chat", hasApiKey: true })).toBe(false);
 
     expect(jevAutoCreateHash("jev")).toBe(JEV_AUTO_CREATE_HASH);

@@ -337,7 +337,9 @@ The provider's **Test connection** sends the same bounded probe decision to the 
 From the CLI, use `ocx combo set <id> --strategy jev --decision-provider ollama-tev1
 --decision-timeout 60000 --targets ...`. In the dashboard, a JEV Combo's editor has **Decision
 service** and **Decision timeout (ms)** fields; **Create JEV Auto** on a self-hosted decision provider
-(keyless rows included) prefills it as the decision service.
+(keyless rows included) prefills it as the decision service. Rows the server would reject or skip
+(disabled, a `baseUrl` not ending in `/systemone`, or no model) are listed with the reason and
+cannot be picked.
 
 For each JEV target, **Models → Combos → Config** has an optional **Additional model notes for JEV**
 field (up to 512 characters; line breaks and tabs are allowed, other control characters are rejected). It is stored as `targets[].modelProfile` in the combo config. The

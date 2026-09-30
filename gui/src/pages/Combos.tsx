@@ -26,6 +26,8 @@ type ProviderOption = {
   authMode?: string;
   adapter?: string;
   baseUrl?: string;
+  defaultModel?: string;
+  models?: string[];
 };
 type ModelOption = { provider: string; id: string; namespaced?: string; reasoningEfforts?: string[]; inputModalities?: string[] };
 type ProviderDto = {
@@ -33,6 +35,7 @@ type ProviderDto = {
   baseUrl: string;
   disabled?: boolean;
   defaultModel?: string;
+  models?: string[];
   authMode?: string;
 };
 type ConfigDto = { providers?: Record<string, ProviderDto> };
@@ -161,6 +164,8 @@ export default function Combos({
       authMode: p.authMode,
       adapter: p.adapter,
       baseUrl: p.baseUrl,
+      ...(typeof p.defaultModel === "string" ? { defaultModel: p.defaultModel } : {}),
+      ...(Array.isArray(p.models) ? { models: p.models.filter((model): model is string => typeof model === "string") } : {}),
     }));
 
     const models: ModelOption[] = [];

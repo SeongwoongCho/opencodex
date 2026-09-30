@@ -82,14 +82,6 @@ export function jevAutoCreateHash(decisionProvider?: string | null): string {
     : JEV_AUTO_CREATE_HASH;
 }
 
-/**
- * Whether a provider row offers "Create JEV Auto". The canonical `jev` row needs its TypeSafe
- * key; a self-hosted `jev-decision` row may be keyless (e.g. a loopback Ollama endpoint).
- */
-export function canCreateJevAutoFrom(row: { name: string; adapter?: string; hasApiKey?: boolean }): boolean {
-  return row.adapter === "jev-decision" && (row.name !== "jev" || row.hasApiKey === true);
-}
-
 /** The decision provider a JEV Auto deep link pre-fills, or undefined when it is not one. */
 export function jevAutoCreateDecisionProvider(hash: string): string | null | undefined {
   const { path, query } = splitHashQuery(normalizeHashPath(hash));

@@ -9,7 +9,6 @@ import {
   intersectComboEfforts,
   updateComboAliasDraft,
   validateComboDraft,
-  withComboStrategy,
 } from "../combo-workspace-data";
 import { IconChevron, IconTrash } from "../icons";
 import { useT } from "../i18n/shared";
@@ -17,7 +16,8 @@ import { Notice } from "../ui";
 import type { ModelOption, ProviderOption } from "./combo-workspace-types";
 import { ComboCapabilities, EffortSelect, JevDecisionFields, StrategySeg, TargetEditor } from "./combo-workspace-controls";
 import { COMBO_STRATEGY_HINT_KEYS, COMBO_TARGETS_HINT_KEYS } from "../combo-workspace-data";
-import { clampedNumberInput } from "./combo-workspace-utils";
+import { clampedNumberInput, comboDraftErrorText } from "./combo-workspace-utils";
+import type { JevDecisionRow } from "../jev-decision-service";
 import { JevStatsPanel } from "./jev-stats-panel";
 import { ComboProtocolPlan } from "./protocols/ComboProtocolPlan";
 
@@ -58,7 +58,7 @@ export function DetailPanel({
   otherIds: string[];
   /** Aliases of all OTHER combos — alias uniqueness validates against these. */
   otherAliases: string[];
-  providerMap: Readonly<Record<string, { disabled?: boolean }>>;
+  providerMap: Readonly<Record<string, JevDecisionRow>>;
   providerQuotaStates: ProviderQuotaStates;
   providers: ProviderOption[];
   models: ModelOption[];
@@ -144,7 +144,7 @@ export function DetailPanel({
       providers: providerMap,
     });
     if (code) {
-      setMsg({ ok: false, text: t(`cws.err.${code}`) });
+      setMsg({ ok: false, text: comboDraftErrorText(t, code, draft, providerMap) });
       return;
     }
     setBusy(true);
@@ -157,6 +157,8 @@ export function DetailPanel({
       alias,
       displayName,
       model: comboPublicModelId(trimmedId, alias),
+      // The server keeps these only for JEV, so the saved baseline must not carry stale ones.
+      ...(draft.strategy === "jev" ? {} : { decisionProvider: null, decisionTimeoutMs: null }),
     };
     const renameFrom = !isCreate && trimmedId !== baseline.id ? baseline.id : undefined;
     try {
@@ -327,7 +329,7 @@ export function DetailPanel({
               <StrategySeg
                 value={draft.strategy}
                 disabled={busy}
-                onChange={(strategy) => updateDraft((d) => withComboStrategy(d, strategy))}
+                onChange={(strategy) => updateDraft((d) => ({ ...d, strategy }))}
               />
               <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
                 {t(COMBO_STRATEGY_HINT_KEYS[draft.strategy])}

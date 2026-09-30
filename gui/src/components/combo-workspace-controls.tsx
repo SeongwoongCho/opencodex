@@ -5,12 +5,15 @@ import {
   COMBO_EFFORTS,
   COMBO_STRATEGIES,
   COMBO_STRATEGY_LABEL_KEYS,
-  JEV_DECISION_TIMEOUT_DEFAULT_MS,
-  JEV_DECISION_TIMEOUT_MAX_MS,
-  JEV_DECISION_TIMEOUT_MIN_MS,
+  JEV_DECISION_ISSUE_LABEL_KEYS,
   jevDecisionServiceOptions,
   newComboTarget,
 } from "../combo-workspace-data";
+import {
+  JEV_DECISION_TIMEOUT_DEFAULT_MS,
+  JEV_DECISION_TIMEOUT_MAX_MS,
+  JEV_DECISION_TIMEOUT_MIN_MS,
+} from "../jev-decision-service";
 import { IconArrowDown, IconArrowUp, IconGrip, IconPlus, IconTrash } from "../icons";
 import { useT } from "../i18n/shared";
 import { Switch } from "../ui";
@@ -178,22 +181,39 @@ export function JevDecisionFields({
           className="input"
           value={selected.id ?? ""}
           disabled={disabled}
+          aria-describedby={selected.issue
+            ? `${idPrefix}-decision-provider-hint ${idPrefix}-decision-provider-issue`
+            : `${idPrefix}-decision-provider-hint`}
+          aria-invalid={selected.issue ? true : undefined}
           onChange={(e) => onChange({ decisionProvider: e.target.value || null })}
         >
           {options.map(option => (
-            <option key={option.id ?? ""} value={option.id ?? ""}>
+            // An unusable row stays visible with its reason; only the stored one stays selectable.
+            <option
+              key={option.id ?? ""}
+              value={option.id ?? ""}
+              disabled={option.issue !== undefined && option.id !== selected.id}
+            >
               {option.id === null
                 ? t("cws.jev.decisionServiceDefault")
-                : option.missing
-                  ? `${option.id} (${t("cws.jev.decisionServiceMissing")})`
+                : option.issue
+                  ? `${option.id} (${t(JEV_DECISION_ISSUE_LABEL_KEYS[option.issue])})`
                   : option.id}
             </option>
           ))}
         </select>
-        <p className="muted" style={{ fontSize: 12, margin: "8px 0 0", overflowWrap: "anywhere" }}>
+        <p id={`${idPrefix}-decision-provider-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0", overflowWrap: "anywhere" }}>
           {selected.id === null ? t("cws.jev.decisionServiceDefaultHint") : t("cws.jev.decisionServiceHint")}
           {selected.baseUrl && <> <code>{selected.baseUrl}</code></>}
         </p>
+        {selected.id !== null && selected.issue && (
+          <p id={`${idPrefix}-decision-provider-issue`} className="muted" style={{ fontSize: 12, margin: "4px 0 0", color: "var(--danger, #b42318)" }}>
+            {t("cws.err.invalidDecisionProvider", {
+              name: selected.id,
+              reason: t(JEV_DECISION_ISSUE_LABEL_KEYS[selected.issue]),
+            })}
+          </p>
+        )}
       </div>
       <div className="cwi-field">
         <label htmlFor={`${idPrefix}-decision-timeout`}>{t("cws.jev.decisionTimeout")}</label>
@@ -208,6 +228,7 @@ export function JevDecisionFields({
           placeholder={String(JEV_DECISION_TIMEOUT_DEFAULT_MS)}
           value={decisionTimeoutMs ?? ""}
           disabled={disabled}
+          aria-describedby={`${idPrefix}-decision-timeout-hint`}
           onChange={(e) => {
             if (e.target.value === "") {
               onChange({ decisionTimeoutMs: null });
@@ -217,7 +238,7 @@ export function JevDecisionFields({
             if (Number.isFinite(value)) onChange({ decisionTimeoutMs: value });
           }}
         />
-        <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
+        <p id={`${idPrefix}-decision-timeout-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
           {t("cws.jev.decisionTimeoutHint", {
             default: JEV_DECISION_TIMEOUT_DEFAULT_MS,
             min: JEV_DECISION_TIMEOUT_MIN_MS,

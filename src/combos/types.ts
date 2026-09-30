@@ -2,22 +2,21 @@ import { isCodexReasoningEffort } from "../reasoning-effort";
 import { SUPPORTED_NATIVE_OPENAI_SLUGS } from "../codex/catalog/native-models";
 import type { OcxComboConfig, OcxComboCooldownWaitPolicy, OcxComboDefaultEffort, OcxComboDefaultEffortMode, OcxComboReasoningEffortMode, OcxComboStrategy, OcxComboTarget, OcxProviderConfig } from "../types";
 import { COMBO_NAMESPACE, isValidComboId, targetKey } from "./identifiers";
+import {
+  CANONICAL_JEV_DECISION_PROVIDER,
+  JEV_DECISION_TIMEOUT_MAX_MS,
+  JEV_DECISION_TIMEOUT_MIN_MS,
+  isSystemOneEndpoint,
+} from "./jev-decision-contract";
 
 export const COMBO_DEFAULT_WAIT_FOR_COOLDOWN_MS = 0;
 export const JEV_MAX_CANDIDATE_FIELD_CHARS = 512;
-export const JEV_DECISION_TIMEOUT_MIN_MS = 1_000;
-export const JEV_DECISION_TIMEOUT_MAX_MS = 120_000;
-/** Canonical TypeSafe decision service; valid as `decisionProvider` even without a provider row. */
-const CANONICAL_JEV_DECISION_PROVIDER = "jev";
-
-/** Whether a self-hosted decision endpoint follows the documented Jev `/systemone` path. */
-export function isSystemOneEndpoint(baseUrl: string): boolean {
-  try {
-    return new URL(baseUrl.trim()).pathname.replace(/\/+$/, "").endsWith("/systemone");
-  } catch {
-    return false;
-  }
-}
+export {
+  JEV_DECISION_TIMEOUT_DEFAULT_MS,
+  JEV_DECISION_TIMEOUT_MAX_MS,
+  JEV_DECISION_TIMEOUT_MIN_MS,
+  isSystemOneEndpoint,
+} from "./jev-decision-contract";
 export { COMBO_NAMESPACE, preservesPhysicalComboProvider, isNativeAliasCombo, targetKey, parseComboModelId, comboModelId, comboPublicModelId, comboDisabledModelId, comboDisabledModelSelectors, resolveComboId, isValidComboId } from "./identifiers";
 
 /**

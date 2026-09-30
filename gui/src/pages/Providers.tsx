@@ -23,7 +23,8 @@ import { buildAccountLoginStatus, buildAddModalAccountRows } from "./providers-p
 import type { CodexAccountMutationCompletion } from "../codex-account-mutation";
 import { useProviderModelsNotice } from "./use-provider-models-notice";
 import { navigateHash } from "../hash-routing";
-import { canCreateJevAutoFrom, jevAutoCreateHash } from "../app-routing";
+import { jevAutoCreateHash } from "../app-routing";
+import { canCreateJevAutoFrom } from "../jev-decision-service";
 import { useProviderSettingsDeepLink } from "./providers-deep-link";
 import { subscribeKiroDeviceFinal } from "../kiro-device-login-finalizer";
 

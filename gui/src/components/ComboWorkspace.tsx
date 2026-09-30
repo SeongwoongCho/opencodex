@@ -6,6 +6,7 @@ import {
   filterCombos,
   groupCombos,
   jevAutoDraft,
+  jevDecisionProviderIssue,
 } from "../combo-workspace-data";
 import { IconChevron, IconPlus, IconSearch, IconShuffle } from "../icons";
 import { useT } from "../i18n/shared";
@@ -37,7 +38,13 @@ export default function ComboWorkspace({
 }: ComboWorkspaceProps) {
   const t = useT();
   const providerMap = useMemo(
-    () => Object.fromEntries(providers.map((provider) => [provider.name, { disabled: provider.disabled }])),
+    () => Object.fromEntries(providers.map((provider) => [provider.name, {
+      disabled: provider.disabled,
+      adapter: provider.adapter,
+      baseUrl: provider.baseUrl,
+      defaultModel: provider.defaultModel,
+      models: provider.models,
+    }])),
     [providers],
   );
   const [query, setQuery] = useState("");
@@ -58,12 +65,13 @@ export default function ComboWorkspace({
       .map(provider => provider.name)),
     [providers],
   );
-  const addDraft = useMemo(
-    () => addIntent === "jev-auto"
-      ? jevAutoDraft(models, jevTargetProviders, addDecisionProvider)
-      : undefined,
-    [addDecisionProvider, addIntent, jevTargetProviders, models],
-  );
+  const addDraft = useMemo(() => {
+    if (addIntent !== "jev-auto") return undefined;
+    // A deep-linked row that is not a usable decision service falls back to TypeSafe.
+    const usable = providers.length === 0
+      || jevDecisionProviderIssue(addDecisionProvider, providerMap) === null;
+    return jevAutoDraft(models, jevTargetProviders, usable ? addDecisionProvider : null);
+  }, [addDecisionProvider, addIntent, jevTargetProviders, models, providerMap, providers.length]);
 
   const filtered = useMemo(() => filterCombos(combos, query), [combos, query]);
   const sections = useMemo(() => groupCombos(filtered), [filtered]);
@@ -267,7 +275,7 @@ export default function ComboWorkspace({
 
       {adding && (
         <AddComboModal
-          key={`${addIntent ?? "blank"}:${addDecisionProvider ?? ""}`}
+          key={`${addIntent ?? "blank"}:${addDraft?.decisionProvider ?? ""}`}
           existingIds={combos.map((c) => c.id)}
           existingAliases={existingComboAliases}
           providerMap={providerMap}

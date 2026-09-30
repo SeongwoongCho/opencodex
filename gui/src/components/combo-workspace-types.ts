@@ -7,6 +7,9 @@ export type ProviderOption = {
   authMode?: string;
   adapter?: string;
   baseUrl?: string;
+  /** Decision-service rows need a model; see jevDecisionRowIssue. */
+  defaultModel?: string;
+  models?: string[];
 };
 export type ModelOption = {
   provider: string;

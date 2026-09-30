@@ -6,6 +6,14 @@
 import { SUPPORTED_NATIVE_OPENAI_SLUGS } from "../../src/codex/catalog/native-models";
 import { PROVIDER_QUOTA_MAX_AGE_MS } from "../../src/providers/quota-types";
 import type { TKey } from "./i18n/shared";
+import {
+  CANONICAL_JEV_DECISION_PROVIDER,
+  JEV_DECISION_TIMEOUT_MAX_MS,
+  JEV_DECISION_TIMEOUT_MIN_MS,
+  type JevDecisionIssue,
+  type JevDecisionRow,
+  jevDecisionRowIssue,
+} from "./jev-decision-service";
 
 export { SUPPORTED_NATIVE_OPENAI_SLUGS };
 
@@ -52,16 +60,14 @@ export const COMBO_TARGETS_HINT_KEYS: Record<ComboStrategy, TKey> = {
 
 const COMBO_STRATEGY_SET = new Set<string>(COMBO_STRATEGIES);
 
-/*
- * Mirrors JEV_DECISION_TIMEOUT_MIN_MS / JEV_DECISION_TIMEOUT_MAX_MS in src/combos/types.ts and
- * JEV_TIMEOUT_MS in src/combos/jev.ts. That module pulls backend-only code into the bundle, so
- * the GUI keeps a copy; tests/gui/combo-workspace-jev-decision.test.ts asserts the bounds match.
- */
-export const JEV_DECISION_TIMEOUT_MIN_MS = 1_000;
-export const JEV_DECISION_TIMEOUT_MAX_MS = 120_000;
-export const JEV_DECISION_TIMEOUT_DEFAULT_MS = 4_000;
-/** Canonical TypeSafe decision service id; the combo stores it as an omitted `decisionProvider`. */
-export const CANONICAL_JEV_DECISION_PROVIDER = "jev";
+export const JEV_DECISION_ISSUE_LABEL_KEYS: Record<JevDecisionIssue, TKey> = {
+  missing: "cws.jev.decisionIssue.missing",
+  notDecision: "cws.jev.decisionIssue.notDecision",
+  disabled: "cws.jev.decisionIssue.disabled",
+  endpoint: "cws.jev.decisionIssue.endpoint",
+  model: "cws.jev.decisionIssue.model",
+};
+
 
 /**
  * Intersection of advertised effort ladders for picker availability.
@@ -215,13 +221,6 @@ function normalizeDecisionProvider(raw: unknown): string | null {
 
 function normalizeDecisionTimeoutMs(raw: unknown): number | null {
   return typeof raw === "number" && Number.isInteger(raw) ? raw : null;
-}
-
-/** Change the strategy; leaving `jev` drops its decision fields, which only JEV accepts. */
-export function withComboStrategy(item: ComboItem, strategy: ComboStrategy): ComboItem {
-  return strategy === "jev"
-    ? { ...item, strategy }
-    : { ...item, strategy, decisionProvider: null, decisionTimeoutMs: null };
 }
 
 function normalizeAlias(raw: unknown): string | null {
@@ -481,8 +480,11 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
     || a.defaultEffort !== b.defaultEffort
     || (a.imageInput ?? "auto") !== (b.imageInput ?? "auto")
     || (a.reasoningEffortMode ?? "strict") !== (b.reasoningEffortMode ?? "strict")
-    || (a.decisionProvider ?? null) !== (b.decisionProvider ?? null)
-    || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
+    // Only JEV sends these; another strategy keeps them in the draft for a switch back.
+    || (a.strategy === "jev" && (
+      (a.decisionProvider ?? null) !== (b.decisionProvider ?? null)
+      || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
+    ))
   ) return false;
   if (a.targets.length !== b.targets.length) return false;
   return a.targets.every((t, i) => {
@@ -573,6 +575,7 @@ export type ComboDraftError =
   | "invalidReasoningEfforts"
   | "invalidModelProfile"
   | "invalidDecisionTimeout"
+  | "invalidDecisionProvider"
   | "noEnabledTarget";
 
 export function validateComboDraft(
@@ -582,7 +585,8 @@ export function validateComboDraft(
     /** Aliases already taken by OTHER combos (callers exclude the edited combo). */
     existingAliases?: readonly string[];
     isCreate: boolean;
-    providers: Readonly<Record<string, { disabled?: boolean }>>;
+    /** Every configured provider; decision fields let a JEV decision service be checked. */
+    providers: Readonly<Record<string, JevDecisionRow>>;
   },
 ): ComboDraftError | null {
   const id = item.id.trim();
@@ -657,6 +661,9 @@ export function validateComboDraft(
       || item.decisionTimeoutMs > JEV_DECISION_TIMEOUT_MAX_MS)) {
     return "invalidDecisionTimeout";
   }
+  if (item.strategy === "jev" && jevDecisionProviderIssue(item.decisionProvider, options.providers) !== null) {
+    return "invalidDecisionProvider";
+  }
 
   if (!item.targets.some((target) => options.providers[target.provider.trim()]?.disabled !== true)) {
     return "noEnabledTarget";
@@ -709,32 +716,50 @@ export function jevAutoDraft(
   };
 }
 
+/** Why a combo's `decisionProvider` is unusable, or null for TypeSafe or a usable row. */
+export function jevDecisionProviderIssue(
+  decisionProvider: string | null | undefined,
+  providers: Readonly<Record<string, JevDecisionRow>>,
+): JevDecisionIssue | null {
+  const id = normalizeDecisionProvider(decisionProvider);
+  if (id === null) return null;
+  return jevDecisionRowIssue(Object.hasOwn(providers, id) ? providers[id] : undefined);
+}
+
 export interface JevDecisionServiceOption {
   /** Provider id written to `decisionProvider`; null selects canonical TypeSafe JEV. */
   id: string | null;
   baseUrl?: string;
-  /** Named by a combo but no longer a configured `jev-decision` row. */
-  missing?: boolean;
+  /** Why the server would reject or the runtime would skip this service; absent when usable. */
+  issue?: JevDecisionIssue;
 }
 
 /**
  * Decision services a JEV combo may name: canonical TypeSafe first, then every configured
- * `adapter: "jev-decision"` row except `jev` itself. A stored id that no longer matches a row
- * stays listed so opening the editor never silently rewrites it.
+ * `adapter: "jev-decision"` row except `jev` itself, each annotated with any usability issue.
+ * A stored id that is not a decision row stays listed so opening the editor never silently
+ * rewrites it.
  */
 export function jevDecisionServiceOptions(
-  providers: readonly { name: string; adapter?: string; baseUrl?: string }[],
+  providers: readonly (JevDecisionRow & { name: string })[],
   current?: string | null,
 ): JevDecisionServiceOption[] {
-  const rows = providers
+  const rows: JevDecisionServiceOption[] = providers
     .filter(provider => provider.adapter === "jev-decision" && provider.name !== CANONICAL_JEV_DECISION_PROVIDER)
     .toSorted((a, b) => a.name.localeCompare(b.name))
-    .map(provider => ({ id: provider.name, ...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}) }));
+    .map(provider => {
+      const issue = jevDecisionRowIssue(provider);
+      return {
+        id: provider.name,
+        ...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
+        ...(issue ? { issue } : {}),
+      };
+    });
   const selected = normalizeDecisionProvider(current);
-  const missing = selected !== null && !rows.some(row => row.id === selected)
-    ? [{ id: selected, missing: true }]
+  const stale: JevDecisionServiceOption[] = selected !== null && !rows.some(row => row.id === selected)
+    ? [{ id: selected, issue: providers.some(provider => provider.name === selected) ? "notDecision" : "missing" }]
     : [];
-  return [{ id: null }, ...rows, ...missing];
+  return [{ id: null }, ...rows, ...stale];
 }
 
 /** Read-only decision-service facts for a JEV combo, or null for other strategies. */
