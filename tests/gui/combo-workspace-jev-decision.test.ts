@@ -166,11 +166,11 @@ describe("JEV decision service in the combo workspace", () => {
   test("the read-only summary names the service, its endpoint and timeout", () => {
     expect(jevDecisionSummary(parseOne({ strategy: "failover" }), providers)).toBeNull();
     expect(jevDecisionSummary(parseOne({ strategy: "jev" }), providers))
-      .toEqual({ provider: null, baseUrl: null, timeoutMs: null });
+      .toEqual({ provider: null, baseUrl: null, timeoutMs: null, quotaSignals: false });
     expect(jevDecisionSummary(
       parseOne({ strategy: "jev", decisionProvider: "mytev", decisionTimeoutMs: 30000 }),
       providers,
-    )).toEqual({ provider: "mytev", baseUrl: "https://local.example/v1/systemone", timeoutMs: 30000 });
+    )).toEqual({ provider: "mytev", baseUrl: "https://local.example/v1/systemone", timeoutMs: 30000, quotaSignals: false });
   });
 
   test("JEV Auto pre-fills a self-hosted decision service and keeps TypeSafe by default", () => {
@@ -202,5 +202,36 @@ describe("JEV decision service in the combo workspace", () => {
     expect(jevAutoCreateDecisionProvider("#models/combos")).toBeUndefined();
     // The router keeps the query on this action link instead of stripping it.
     expect(resolveAppHashChange(hash)).toEqual({ page: "models", replaceTo: null });
+  });
+});
+
+describe("JEV quota signals in the combo workspace", () => {
+  test("parse keeps only an enabled flag and PUT always sends it explicitly for JEV", () => {
+    const on = parseOne({ strategy: "jev", decisionQuotaSignals: true });
+    expect(on.decisionQuotaSignals).toBe(true);
+    expect(toPutBody(on).combo.decisionQuotaSignals).toBe(true);
+    for (const raw of [false, "true", 1, undefined]) {
+      const off = parseOne({ strategy: "jev", decisionQuotaSignals: raw });
+      expect(Object.hasOwn(off, "decisionQuotaSignals")).toBe(false);
+      // Explicit false, because the server keeps an omitted value.
+      const body = toPutBody(off).combo;
+      expect(Object.hasOwn(body, "decisionQuotaSignals")).toBe(true);
+      expect(body.decisionQuotaSignals).toBe(false);
+    }
+  });
+
+  test("toggling dirties a JEV draft only; other strategies never send it", () => {
+    const baseline = parseOne({ strategy: "jev" });
+    expect(draftEquals(baseline, { ...baseline, decisionQuotaSignals: true })).toBe(false);
+    expect(draftEquals(baseline, { ...baseline, decisionQuotaSignals: false })).toBe(true);
+    const failover: ComboItem = { ...baseline, strategy: "failover", decisionQuotaSignals: true };
+    expect(Object.hasOwn(toPutBody(failover).combo, "decisionQuotaSignals")).toBe(false);
+    expect(draftEquals(failover, { ...failover, decisionQuotaSignals: false })).toBe(true);
+    expect(toPutBody({ ...failover, strategy: "jev" }).combo.decisionQuotaSignals).toBe(true);
+  });
+
+  test("the overview summary reports a quota-aware JEV combo", () => {
+    expect(jevDecisionSummary(parseOne({ strategy: "jev", decisionQuotaSignals: true }), providers))
+      .toEqual({ provider: null, baseUrl: null, timeoutMs: null, quotaSignals: true });
   });
 });

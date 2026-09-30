@@ -128,6 +128,7 @@ describe("combo-workspace-data", () => {
         alias: "jev-auto",
         decisionProvider: null,
         decisionTimeoutMs: null,
+        decisionQuotaSignals: false,
       },
     });
   });

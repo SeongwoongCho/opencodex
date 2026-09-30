@@ -159,6 +159,7 @@ export function JevDecisionFields({
   providers,
   decisionProvider,
   decisionTimeoutMs,
+  decisionQuotaSignals,
   disabled,
   onChange,
 }: {
@@ -166,8 +167,13 @@ export function JevDecisionFields({
   providers: ProviderOption[];
   decisionProvider: string | null;
   decisionTimeoutMs: number | null;
+  decisionQuotaSignals: boolean;
   disabled?: boolean;
-  onChange: (patch: { decisionProvider?: string | null; decisionTimeoutMs?: number | null }) => void;
+  onChange: (patch: {
+    decisionProvider?: string | null;
+    decisionTimeoutMs?: number | null;
+    decisionQuotaSignals?: boolean;
+  }) => void;
 }) {
   const t = useT();
   const options = jevDecisionServiceOptions(providers, decisionProvider);
@@ -244,6 +250,22 @@ export function JevDecisionFields({
             min: JEV_DECISION_TIMEOUT_MIN_MS,
             max: JEV_DECISION_TIMEOUT_MAX_MS,
           })}
+        </p>
+      </div>
+      <div className="cwi-field">
+        <label className="cwi-jev-effort" htmlFor={`${idPrefix}-decision-quota`}>
+          <input
+            id={`${idPrefix}-decision-quota`}
+            type="checkbox"
+            checked={decisionQuotaSignals}
+            disabled={disabled}
+            aria-describedby={`${idPrefix}-decision-quota-hint`}
+            onChange={(e) => onChange({ decisionQuotaSignals: e.target.checked })}
+          />
+          {t("cws.jev.quotaSignals")}
+        </label>
+        <p id={`${idPrefix}-decision-quota-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
+          {t("cws.jev.quotaSignalsHint")}
         </p>
       </div>
     </>

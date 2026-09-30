@@ -167,6 +167,8 @@ export interface ComboItem {
   decisionProvider?: string | null;
   /** `jev` only: decision deadline in ms; null/omitted = the server default. */
   decisionTimeoutMs?: number | null;
+  /** `jev` only: send each target's remaining-quota tier with the decision; omitted = off. */
+  decisionQuotaSignals?: boolean;
   targets: ComboTarget[];
 }
 
@@ -311,6 +313,7 @@ export function parseComboList(payload: unknown): ComboItem[] {
       // Sparse like the wire: only a JEV combo that names a service or deadline carries them.
       ...(decisionProvider !== null ? { decisionProvider } : {}),
       ...(decisionTimeoutMs !== null ? { decisionTimeoutMs } : {}),
+      ...(r.decisionQuotaSignals === true ? { decisionQuotaSignals: true } : {}),
       targets,
     });
   }
@@ -484,6 +487,7 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
     || (a.strategy === "jev" && (
       (a.decisionProvider ?? null) !== (b.decisionProvider ?? null)
       || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
+      || (a.decisionQuotaSignals === true) !== (b.decisionQuotaSignals === true)
     ))
   ) return false;
   if (a.targets.length !== b.targets.length) return false;
@@ -512,6 +516,7 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
     displayName?: string;
     decisionProvider?: string | null;
     decisionTimeoutMs?: number | null;
+    decisionQuotaSignals?: boolean;
   };
 } {
   const weighted = item.strategy === "round-robin" || item.strategy === "random";
@@ -547,6 +552,8 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
         ? {
             decisionProvider: normalizeDecisionProvider(item.decisionProvider),
             decisionTimeoutMs: item.decisionTimeoutMs ?? null,
+            // Explicit false turns it off; the server keeps an omitted value.
+            decisionQuotaSignals: item.decisionQuotaSignals === true,
           }
         : {}),
     },
@@ -764,9 +771,9 @@ export function jevDecisionServiceOptions(
 
 /** Read-only decision-service facts for a JEV combo, or null for other strategies. */
 export function jevDecisionSummary(
-  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionTimeoutMs">,
+  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionTimeoutMs" | "decisionQuotaSignals">,
   providers: readonly { name: string; adapter?: string; baseUrl?: string }[],
-): { provider: string | null; baseUrl: string | null; timeoutMs: number | null } | null {
+): { provider: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean } | null {
   if (item.strategy !== "jev") return null;
   const provider = normalizeDecisionProvider(item.decisionProvider);
   const row = provider === null ? undefined : providers.find(candidate => candidate.name === provider);
@@ -774,5 +781,6 @@ export function jevDecisionSummary(
     provider,
     baseUrl: row?.baseUrl?.trim() || null,
     timeoutMs: item.decisionTimeoutMs ?? null,
+    quotaSignals: item.decisionQuotaSignals === true,
   };
 }

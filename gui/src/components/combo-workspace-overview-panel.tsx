@@ -86,6 +86,9 @@ export function OverviewPanel({
                     ? t("cws.jev.decisionTimeoutDefaultShort")
                     : t("cws.jev.decisionTimeoutShort", { ms: decision.timeoutMs })}
                 </span>
+                {decision.quotaSignals && (
+                  <span className="muted" data-quota-signals>{t("cws.jev.quotaAwareShort")}</span>
+                )}
                 <IconChevron width={14} height={14} style={{ marginLeft: "auto" }} aria-hidden="true" />
               </button>
             ))}

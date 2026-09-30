@@ -187,6 +187,7 @@ export function AddComboModal({
               providers={providers}
               decisionProvider={draft.decisionProvider ?? null}
               decisionTimeoutMs={draft.decisionTimeoutMs ?? null}
+              decisionQuotaSignals={draft.decisionQuotaSignals === true}
               disabled={busy}
               onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
             />
