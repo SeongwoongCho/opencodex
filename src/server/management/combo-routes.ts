@@ -222,7 +222,7 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         ? { defaultEffortMode: previous.defaultEffortMode }
         : {}),
       // An API or CLI round-trip of a JEV combo that omits these keeps them; the dashboard sends
-      // all three explicitly (null/false = default). Switching to another strategy drops them rather than
+      // the first three explicitly (null/false = default). Switching to another strategy drops them rather than
       // failing validation.
       ...(!Object.hasOwn(requestedCombo, "decisionProvider")
         && previous?.decisionProvider !== undefined
@@ -238,6 +238,23 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         && previous?.decisionQuotaSignals !== undefined
         && requestedCombo.strategy === "jev"
         ? { decisionQuotaSignals: previous.decisionQuotaSignals }
+        : {}),
+      // Level-mode fields follow the same rule. The dashboard sends only decisionMode, so its
+      // round-trip keeps levels it cannot edit.
+      ...(!Object.hasOwn(requestedCombo, "decisionMode")
+        && previous?.decisionMode !== undefined
+        && requestedCombo.strategy === "jev"
+        ? { decisionMode: previous.decisionMode }
+        : {}),
+      ...(!Object.hasOwn(requestedCombo, "decisionLevels")
+        && previous?.decisionLevels !== undefined
+        && requestedCombo.strategy === "jev"
+        ? { decisionLevels: previous.decisionLevels }
+        : {}),
+      ...(!Object.hasOwn(requestedCombo, "decisionFallbackLevel")
+        && previous?.decisionFallbackLevel !== undefined
+        && requestedCombo.strategy === "jev"
+        ? { decisionFallbackLevel: previous.decisionFallbackLevel }
         : {}),
     };
     const error = comboConfigError(id, effectiveCombo, config.providers, {

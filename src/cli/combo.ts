@@ -1,3 +1,4 @@
+import { JEV_DECISION_MODES, JEV_LEVEL_IDS } from "../combos/jev-decision-contract";
 import { JEV_DECISION_TIMEOUT_MAX_MS, JEV_DECISION_TIMEOUT_MIN_MS } from "../combos/types";
 import {
   CliUsageError,
@@ -20,6 +21,7 @@ const USAGE = `Usage:
       (force overrides valid client effort and can increase cost/latency) [--alias <name|->]
       [--native-alias] [--display-name <label|->]
       [--decision-provider <provider|->] [--decision-timeout <ms|->] [--decision-quota <on|off|->]
+      [--decision-mode <route|level|->] [--decision-levels <json|->] [--decision-fallback-level <level|->]
       (jev only; the provider must be a configured jev-decision row)
       [--rename-from <id>] [--json]
   ocx combo remove <id> --yes [--json]`;
@@ -119,6 +121,36 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if ((decisionQuota === "on" || decisionQuota === "off") && strategy !== "jev") {
     throw new CliUsageError("--decision-quota applies only to the jev strategy", USAGE);
   }
+  const decisionMode = takeOption(args, "--decision-mode");
+  if (decisionMode !== undefined && decisionMode !== "-" && !(JEV_DECISION_MODES as readonly string[]).includes(decisionMode)) {
+    throw new CliUsageError(`--decision-mode must be ${JEV_DECISION_MODES.join(", ")}, or -`, USAGE);
+  }
+  const decisionLevelsRaw = takeOption(args, "--decision-levels");
+  let decisionLevels: unknown;
+  if (decisionLevelsRaw !== undefined && decisionLevelsRaw !== "-") {
+    try {
+      decisionLevels = JSON.parse(decisionLevelsRaw);
+    } catch {
+      throw new CliUsageError("--decision-levels must be a JSON object, or -", USAGE);
+    }
+    if (!decisionLevels || typeof decisionLevels !== "object" || Array.isArray(decisionLevels)) {
+      throw new CliUsageError("--decision-levels must be a JSON object, or -", USAGE);
+    }
+  }
+  const decisionFallbackLevel = takeOption(args, "--decision-fallback-level");
+  if (decisionFallbackLevel !== undefined && decisionFallbackLevel !== "-"
+    && !(JEV_LEVEL_IDS as readonly string[]).includes(decisionFallbackLevel)) {
+    throw new CliUsageError(`--decision-fallback-level must be one of ${JEV_LEVEL_IDS.join(", ")}, or -`, USAGE);
+  }
+  for (const [flag, value] of [
+    ["--decision-mode", decisionMode],
+    ["--decision-levels", decisionLevelsRaw],
+    ["--decision-fallback-level", decisionFallbackLevel],
+  ] as const) {
+    if (value !== undefined && value !== "-" && strategy !== "jev") {
+      throw new CliUsageError(`${flag} applies only to the jev strategy`, USAGE);
+    }
+  }
   const renameFrom = takeOption(args, "--rename-from");
   rejectArgs(args, USAGE);
   const combo: Record<string, unknown> = {
@@ -134,6 +166,11 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (decisionProvider !== undefined) combo.decisionProvider = decisionProvider === "-" ? null : decisionProvider;
   if (decisionTimeoutMs !== undefined) combo.decisionTimeoutMs = decisionTimeoutMs;
   if (decisionQuota !== undefined) combo.decisionQuotaSignals = decisionQuota === "-" ? null : decisionQuota === "on";
+  if (decisionMode !== undefined) combo.decisionMode = decisionMode === "-" ? null : decisionMode;
+  if (decisionLevelsRaw !== undefined) combo.decisionLevels = decisionLevelsRaw === "-" ? null : decisionLevels;
+  if (decisionFallbackLevel !== undefined) {
+    combo.decisionFallbackLevel = decisionFallbackLevel === "-" ? null : decisionFallbackLevel;
+  }
   const current = await runtimeRequest<{ combos?: ComboRow[] }>("/api/combos", {}, deps);
   const existing = (current.combos ?? []).find(row => row.id === (renameFrom ?? id));
   if (existing?.imageInput === "disabled") combo.imageInput = "disabled";

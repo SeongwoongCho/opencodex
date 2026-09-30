@@ -1,5 +1,6 @@
 import type { OcxProviderConfig } from "./provider";
 import type { CodexAccount } from "./accounts";
+import type { JevDecisionMode, JevLevelId } from "../combos/jev-decision-contract";
 
 export interface AnthropicModelRoute {
   name: string;
@@ -1359,6 +1360,35 @@ export interface OcxComboConfig {
    * `ocx provider quota` shows). Omitted or false sends today's request unchanged.
    */
   decisionQuotaSignals?: boolean;
+  /**
+   * `strategy: "jev"` only: `"route"` (the default; omitted) asks the decision model for a target
+   * and effort together. `"level"` asks it only to classify the next call into one of
+   * `decisionLevels`, and ocx picks the level's first usable candidate; with
+   * `decisionQuotaSignals: true` that pick also prefers candidates with healthier cached quota.
+   */
+  decisionMode?: JevDecisionMode;
+  /**
+   * `strategy: "jev"` only: per-level candidate lists for `decisionMode: "level"`. Every candidate
+   * names one of `targets` and, optionally, an effort that target allows. Kept while the mode is
+   * `"route"` so switching modes loses nothing.
+   */
+  decisionLevels?: Partial<Record<JevLevelId, OcxComboDecisionLevel>>;
+  /** Level tried when the classified level has no usable candidate; default `"routine"`. */
+  decisionFallbackLevel?: JevLevelId;
+}
+
+export interface OcxComboDecisionLevel {
+  /** Optional replacement for the built-in level description sent to the decision model. */
+  description?: string;
+  /** Ordered preferences; the first usable one wins (after quota tiers when quota-aware). */
+  candidates: OcxComboDecisionLevelCandidate[];
+}
+
+export interface OcxComboDecisionLevelCandidate {
+  provider: string;
+  model: string;
+  /** Effort to apply; omitted uses the target's fail-open effort (medium, or the next lower). */
+  effort?: OcxComboDefaultEffort;
 }
 
 export type OcxRoutingUnknownEvidenceMode = "allow" | "penalize" | "exclude";

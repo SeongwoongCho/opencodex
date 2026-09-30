@@ -74,3 +74,10 @@ export {
   type JevQuotaDecisionSummary,
   type JevQuotaSignal,
 } from "./jev-quota";
+export {
+  buildJevLevelQuestion,
+  parseJevLevelDecision,
+  resolveJevLevelDecision,
+  selectJevLevelCandidate,
+  type JevLevelDecision,
+} from "./jev-level";

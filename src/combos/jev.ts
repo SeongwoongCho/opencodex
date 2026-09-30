@@ -438,7 +438,8 @@ export function buildJevState(body: unknown, candidates: readonly JevCandidate[]
   };
 }
 
-function hasJevDecisionState(state: Record<string, unknown>): boolean {
+/** Whether extracted state carries any evidence worth a decision request. */
+export function hasJevDecisionState(state: Record<string, unknown>): boolean {
   if (typeof state.task === "string" && state.task.trim()) return true;
   if (isRecord(state.signals) && state.signals.has_image === true) return true;
   return isRecord(state.step)
@@ -536,7 +537,7 @@ export function buildJevRouteQuestion(
   };
 }
 
-function jevUsage(payload: Record<string, unknown>): Record<string, number> | undefined {
+export function jevUsage(payload: Record<string, unknown>): Record<string, number> | undefined {
   if (!isRecord(payload.usage)) return undefined;
   const usage: Record<string, number> = {};
   for (const [key, value] of Object.entries(payload.usage)) {
@@ -544,6 +545,43 @@ function jevUsage(payload: Record<string, unknown>): Record<string, number> | un
     if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) usage[key] = value;
   }
   return Object.keys(usage).length > 0 ? usage : undefined;
+}
+
+/**
+ * Strictly validate one choice answer's optional `probabilities` against exactly the offered
+ * choices and return the chosen probability. `label` names the question in thrown errors.
+ */
+export function jevChoiceProbability(
+  answer: Record<string, unknown>,
+  offered: readonly string[],
+  label: string,
+): number | undefined {
+  if (answer.probabilities === undefined) return undefined;
+  const probabilities = answer.probabilities;
+  if (!isRecord(probabilities)) throw new Error(`invalid JEV ${label} probabilities`);
+  const expected = [...offered].sort();
+  const actual = Object.keys(probabilities).sort();
+  if (expected.length !== actual.length || expected.some((key, index) => key !== actual[index])) {
+    throw new Error(`incomplete JEV ${label} distribution`);
+  }
+  const values = actual.map(key => probabilities[key]);
+  if (values.some(value => typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
+    throw new Error(`invalid JEV ${label} probabilities`);
+  }
+  const numeric = values as number[];
+  const selected = probabilities[answer.choice as string] as number;
+  if (Math.abs(numeric.reduce((sum, value) => sum + value, 0) - 1) > 0.02
+    || selected < Math.max(...numeric) - 1e-6) {
+    throw new Error(`inconsistent JEV ${label} distribution`);
+  }
+  return selected;
+}
+
+/** A reported confidence in 0..1, or undefined. */
+export function jevConfidence(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : undefined;
 }
 
 export function parseJevDecision(
@@ -559,35 +597,9 @@ export function parseJevDecision(
     throw new Error("unknown JEV route choice");
   }
 
-  let chosenProbability: number | undefined;
-  if (answer.probabilities !== undefined) {
-    const probabilities = answer.probabilities;
-    if (!isRecord(probabilities)) throw new Error("invalid JEV route probabilities");
-    const expected = [...options.keys()].sort();
-    const actual = Object.keys(probabilities).sort();
-    if (expected.length !== actual.length || expected.some((key, index) => key !== actual[index])) {
-      throw new Error("incomplete JEV route distribution");
-    }
-    const values = actual.map(key => probabilities[key]);
-    if (values.some(value => typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
-      throw new Error("invalid JEV route probabilities");
-    }
-    const numeric = values as number[];
-    const selected = probabilities[answer.choice] as number;
-    if (Math.abs(numeric.reduce((sum, value) => sum + value, 0) - 1) > 0.02
-      || selected < Math.max(...numeric) - 1e-6) {
-      throw new Error("inconsistent JEV route distribution");
-    }
-    chosenProbability = selected;
-  }
-
+  const chosenProbability = jevChoiceProbability(answer, [...options.keys()], "route");
   const option = options.get(answer.choice)!;
-  const confidence = typeof answer.confidence === "number"
-    && Number.isFinite(answer.confidence)
-    && answer.confidence >= 0
-    && answer.confidence <= 1
-    ? answer.confidence
-    : undefined;
+  const confidence = jevConfidence(answer.confidence);
   const usage = jevUsage(payload);
   return {
     targetKey: option.targetKey,
@@ -696,68 +708,52 @@ function jevDecisionEndpoint(config: OcxConfig, decisionProvider: string): JevDe
   };
 }
 
+export type JevDecisionFailureGate = Exclude<JevDecision["gate"], "apply">;
+
+/** What a decision exchange needs to know about its endpoint to build the request body. */
+export interface JevDecisionEndpointShape {
+  model: string;
+  /** Self-hosted System One services accept only string option descriptions. */
+  descriptiveCriteria: boolean;
+}
+
+/** Whether a serialized decision request fits the outbound request cap. */
+export function fitsJevRequestBytes(body: string): boolean {
+  return new TextEncoder().encode(body).byteLength <= JEV_MAX_REQUEST_BYTES;
+}
+
+function decisionTimeoutMs(timeoutMs: number | undefined): number {
+  return timeoutMs !== undefined
+    && Number.isInteger(timeoutMs)
+    && timeoutMs >= JEV_DECISION_TIMEOUT_MIN_MS
+    && timeoutMs <= JEV_DECISION_TIMEOUT_MAX_MS
+    ? timeoutMs
+    : JEV_DECISION_TIMEOUT_DEFAULT_MS;
+}
+
 /**
- * Ask the configured JEV decision service for one allowlisted target/effort decision.
- *
- * Every operational or response failure returns the supplied first-eligible fallback. A caller
- * abort is the exception: request cancellation remains cancellation and is rethrown by identity.
+ * One decision round-trip shared by every decision mode: endpoint and credential resolution, the
+ * request built by `prepare` for that endpoint, the deadline, the no-redirect policy, and the
+ * bounded UTF-8 JSON response. Operational failures come back as a fail-open gate; a caller abort
+ * is rethrown by identity. `prepare` may refuse locally by returning a gate, or throw (`invalid`).
  */
-export async function resolveJevDecision(options: ResolveJevDecisionOptions): Promise<JevDecision> {
-  const now = options.now ?? Date.now;
-  const startedAt = now();
-  let quotaSent = false;
-  const failed = (gate: Exclude<JevDecision["gate"], "apply">): JevDecision => ({
-    ...fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt)),
-    ...(quotaSent ? { quotaSent: true as const } : {}),
-  });
-
-  if (options.signal?.aborted) throw options.signal.reason;
-  if (options.candidates.length === 0) return failed("no_choices");
-  if (!candidatesFitRequestBounds(options.candidates)) return failed("invalid");
-
+export async function exchangeJevDecision(
+  options: Pick<ResolveJevDecisionOptions, "config" | "decisionProvider" | "timeoutMs" | "signal" | "post">,
+  prepare: (endpoint: JevDecisionEndpointShape) => { body: string } | JevDecisionFailureGate,
+): Promise<{ payload: unknown } | { gate: JevDecisionFailureGate }> {
   const endpoint = jevDecisionEndpoint(options.config, options.decisionProvider ?? JEV_PROVIDER_ID);
-  if (!endpoint) return failed("missing_key");
+  if (!endpoint) return { gate: "missing_key" };
 
   let requestBody: string;
   try {
-    if (endpoint.descriptiveCriteria) {
-      // Self-hosted choice questions accept 2..26 options; decide locally instead of spending a
-      // round-trip on a request the service will refuse.
-      const optionCount = candidateOptions(options.candidates).size;
-      if (optionCount < SELF_HOSTED_MIN_OPTIONS) return failed("no_choices");
-      if (optionCount > SELF_HOSTED_MAX_OPTIONS) return failed("invalid");
-    }
-    const state = buildJevState(options.body, options.candidates);
-    if (!hasJevDecisionState(state)) return failed("no_state");
-    const serialize = (candidates: readonly JevCandidate[]) => JSON.stringify({
-      model: endpoint.model,
-      state,
-      questions: buildJevRouteQuestion(candidates, { descriptiveCriteria: endpoint.descriptiveCriteria }),
-    });
-    const fits = (body: string) => new TextEncoder().encode(body).byteLength <= JEV_MAX_REQUEST_BYTES;
-    requestBody = serialize(options.candidates);
-    const withQuota = options.candidates.some(candidate => candidate.quota !== undefined);
-    if (!fits(requestBody) && withQuota) {
-      // Quota evidence is optional: a large Combo that only overflows because of it still gets a
-      // decision, just without the quota clauses.
-      requestBody = serialize(options.candidates.map(({ quota: _quota, ...candidate }) => candidate));
-      if (!fits(requestBody)) return failed("invalid");
-    } else if (!fits(requestBody)) {
-      return failed("invalid");
-    } else {
-      quotaSent = withQuota;
-    }
+    const prepared = prepare(endpoint);
+    if (typeof prepared === "string") return { gate: prepared };
+    requestBody = prepared.body;
   } catch {
-    return failed("invalid");
+    return { gate: "invalid" };
   }
 
-  const timeoutMs = options.timeoutMs !== undefined
-    && Number.isInteger(options.timeoutMs)
-    && options.timeoutMs >= JEV_DECISION_TIMEOUT_MIN_MS
-    && options.timeoutMs <= JEV_DECISION_TIMEOUT_MAX_MS
-    ? options.timeoutMs
-    : JEV_DECISION_TIMEOUT_DEFAULT_MS;
-  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const timeoutSignal = AbortSignal.timeout(decisionTimeoutMs(options.timeoutMs));
   const signal = options.signal
     ? AbortSignal.any([options.signal, timeoutSignal])
     : timeoutSignal;
@@ -781,10 +777,10 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
     if (options.signal?.aborted) throw options.signal.reason;
 
     const redirectError = await providerRedirectError(response, endpoint.url);
-    if (redirectError) return failed("redirect");
+    if (redirectError) return { gate: "redirect" };
     if (!response.ok) {
       try { void response.body?.cancel().catch(() => undefined); } catch { /* best effort */ }
-      return failed("http");
+      return { gate: "http" };
     }
 
     const bounded = await readBoundedResponseBytes(response, {
@@ -792,37 +788,85 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
       signal,
     });
     if (options.signal?.aborted) throw options.signal.reason;
-    if (bounded.oversized) return failed("malformed");
+    if (bounded.oversized) return { gate: "malformed" };
 
-    let payload: unknown;
     try {
       const text = new TextDecoder("utf-8", { fatal: true }).decode(bounded.bytes);
-      payload = JSON.parse(text);
+      return { payload: JSON.parse(text) };
     } catch {
-      return failed("malformed");
+      return { gate: "malformed" };
     }
-
-    let parsed: ReturnType<typeof parseJevDecision>;
-    try {
-      parsed = parseJevDecision(payload, options.candidates);
-    } catch {
-      return failed("invalid");
-    }
-    if (options.signal?.aborted) throw options.signal.reason;
-    return {
-      ...parsed,
-      gate: "apply",
-      latencyMs: Math.max(0, now() - startedAt),
-      ...(quotaSent ? { quotaSent: true as const } : {}),
-    };
   } catch (error) {
     if (options.signal?.aborted) throw options.signal.reason;
     if (timeoutSignal.aborted
       || (error instanceof DOMException && error.name === "TimeoutError")) {
-      return failed("timeout");
+      return { gate: "timeout" };
     }
-    return failed("network");
+    return { gate: "network" };
   }
+}
+
+/**
+ * Ask the configured JEV decision service for one allowlisted target/effort decision.
+ *
+ * Every operational or response failure returns the supplied first-eligible fallback. A caller
+ * abort is the exception: request cancellation remains cancellation and is rethrown by identity.
+ */
+export async function resolveJevDecision(options: ResolveJevDecisionOptions): Promise<JevDecision> {
+  const now = options.now ?? Date.now;
+  const startedAt = now();
+  let quotaSent = false;
+  const failed = (gate: JevDecisionFailureGate): JevDecision => ({
+    ...fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt)),
+    ...(quotaSent ? { quotaSent: true as const } : {}),
+  });
+
+  if (options.signal?.aborted) throw options.signal.reason;
+  if (options.candidates.length === 0) return failed("no_choices");
+  if (!candidatesFitRequestBounds(options.candidates)) return failed("invalid");
+
+  const exchanged = await exchangeJevDecision(options, (endpoint) => {
+    if (endpoint.descriptiveCriteria) {
+      // Self-hosted choice questions accept 2..26 options; decide locally instead of spending a
+      // round-trip on a request the service will refuse.
+      const optionCount = candidateOptions(options.candidates).size;
+      if (optionCount < SELF_HOSTED_MIN_OPTIONS) return "no_choices";
+      if (optionCount > SELF_HOSTED_MAX_OPTIONS) return "invalid";
+    }
+    const state = buildJevState(options.body, options.candidates);
+    if (!hasJevDecisionState(state)) return "no_state";
+    const serialize = (candidates: readonly JevCandidate[]) => JSON.stringify({
+      model: endpoint.model,
+      state,
+      questions: buildJevRouteQuestion(candidates, { descriptiveCriteria: endpoint.descriptiveCriteria }),
+    });
+    const withQuota = options.candidates.some(candidate => candidate.quota !== undefined);
+    const full = serialize(options.candidates);
+    if (fitsJevRequestBytes(full)) {
+      quotaSent = withQuota;
+      return { body: full };
+    }
+    if (!withQuota) return "invalid";
+    // Quota evidence is optional: a large Combo that only overflows because of it still gets a
+    // decision, just without the quota clauses.
+    const withoutQuota = serialize(options.candidates.map(({ quota: _quota, ...candidate }) => candidate));
+    return fitsJevRequestBytes(withoutQuota) ? { body: withoutQuota } : "invalid";
+  });
+  if ("gate" in exchanged) return failed(exchanged.gate);
+
+  let parsed: ReturnType<typeof parseJevDecision>;
+  try {
+    parsed = parseJevDecision(exchanged.payload, options.candidates);
+  } catch {
+    return failed("invalid");
+  }
+  if (options.signal?.aborted) throw options.signal.reason;
+  return {
+    ...parsed,
+    gate: "apply",
+    latencyMs: Math.max(0, now() - startedAt),
+    ...(quotaSent ? { quotaSent: true as const } : {}),
+  };
 }
 
 export type JevDecisionProbeResult =

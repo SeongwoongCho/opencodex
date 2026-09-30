@@ -102,3 +102,41 @@ body that exceeds `JEV_MAX_REQUEST_BYTES` only because of quota is rebuilt witho
 `core-combo.ts` persist `jevDecision.quota` (target counts per tier and the picked target's tier,
 re-validated in `src/usage/jev-stats.ts`, no account identity). The signal is advisory: eligibility
 and exhaustion vetoes stay in `src/combos/resolve.ts`.
+
+## Level mode
+
+`combos[*].decisionMode: "level"` (JEV only; `"route"` is stored as omission) swaps the joint route
+question for demand-level classification. `src/combos/jev-decision-contract.ts` owns the import-free
+level ids (`trivial`, `routine`, `hard`, `deep`, `agentic_heavy`, `agentic_light`), their built-in
+descriptions, the default fallback level `routine`, and the `chosen`/`fallback_level`/`fail_open`
+paths the GUI and telemetry share. `src/combos/jev-level-config.ts` validates and sparsely normalizes
+`decisionLevels` (at least two known levels in canonical order, 1–32 candidates each, every candidate a
+Combo target with an effort from that target's `reasoningEfforts` when set, no duplicates, optional
+bounded `description`) and `decisionFallbackLevel` (a configured level); all three fields are
+refused off `jev`, and `decisionMode: "level"` without levels is refused. Management PUT carries each
+of them across an omission while the strategy stays `jev`; the dashboard sends only `decisionMode`,
+so levels it shows read-only survive its saves.
+
+`src/combos/jev-level.ts` asks one `level` choice question with plain string criteria (the same
+shape for TypeSafe and self-hosted services) over `buildJevState(body)` without candidates, so no
+`operator_notes`, target, or quota text is sent. The endpoint, credential pinning, cleartext policy,
+deadline, no-redirect rule, and bounded response come from `exchangeJevDecision` in
+`src/combos/jev.ts`, shared with route mode; the answer's `choice` must be an offered level and a
+`probabilities` map must cover exactly the offered levels (`jevChoiceProbability`). Selection is
+synchronous: the level's candidates in order, restricted to the route-mode eligibility set from
+`src/server/responses/core-combo.ts` (cooldown, disabled, lastResort deferral, capability-intersected
+efforts); an effort-less candidate takes the fail-open effort. With `decisionQuotaSignals: true` the
+`jev-quota.ts` tier on each eligible candidate orders the level stably (healthy or unknown, then
+limited, then nearly exhausted), which makes quota a deterministic preference rather than advice.
+No usable candidate tries `decisionFallbackLevel`, then the first-eligible fail-open target; a failed
+decision fails open with the route-mode gate. `core-combo.ts` applies the chosen effort exactly like a
+route decision and persists `level`/`levelPath` plus, when quota-aware, the tier summary over the
+weighed candidates; `src/usage/jev-stats.ts` keeps only known values, and a `level` only beside a
+`levelPath`.
+
+`src/combos/jev-quota-warmer.ts` keeps those cached quota rows fresh while a quota-aware level-mode
+Combo exists: `src/server/background-lifecycle.ts` starts one unref'd timer (first tick after about a
+minute, then every five minutes plus up to a minute of jitter) whose tick reloads config and, only for
+such a Combo, calls the unforced `fetchProviderQuotaReports` the Providers page uses, joining any
+refresh in flight. The module has no static imports, so the composition-root edge costs one module and
+nothing reaches the request path.

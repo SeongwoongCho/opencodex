@@ -8,6 +8,8 @@ import {
   JEV_DECISION_TIMEOUT_MIN_MS,
   isSystemOneEndpoint,
 } from "./jev-decision-contract";
+import type { JevLevelId } from "./jev-decision-contract";
+import { jevLevelConfigIssues, normalizeJevLevelFields, type NormalizedJevLevels } from "./jev-level-config";
 
 export const COMBO_DEFAULT_WAIT_FOR_COOLDOWN_MS = 0;
 export const JEV_MAX_CANDIDATE_FIELD_CHARS = 512;
@@ -70,6 +72,12 @@ export interface NormalizedComboConfig {
   decisionTimeoutMs?: number;
   /** JEV remaining-quota signals opt-in; present only when enabled. */
   decisionQuotaSignals?: true;
+  /** JEV level mode; present only as `"level"` (omitted means `"route"`). */
+  decisionMode?: "level";
+  /** JEV level candidate lists, canonical level order; kept in either mode. */
+  decisionLevels?: NormalizedJevLevels;
+  /** Explicit level-mode fallback level; absent means `"routine"`. */
+  decisionFallbackLevel?: JevLevelId;
   targets: NormalizedComboTarget[];
 }
 
@@ -335,6 +343,7 @@ export function comboConfigIssues(
       issues.push({ path: ["decisionQuotaSignals"], message: 'decisionQuotaSignals is only valid with strategy "jev"' });
     }
   }
+  issues.push(...jevLevelConfigIssues(body));
 
   if (!Array.isArray(body.targets) || body.targets.length === 0) {
     issues.push({ path: ["targets"], message: "targets must be a non-empty array" });
@@ -480,6 +489,7 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
     ...(typeof raw.decisionTimeoutMs === "number" ? { decisionTimeoutMs: raw.decisionTimeoutMs } : {}),
     // Off is the default and stays sparse.
     ...(raw.decisionQuotaSignals === true ? { decisionQuotaSignals: true as const } : {}),
+    ...normalizeJevLevelFields(raw),
     targets: raw.targets.map(target => ({
       provider: target.provider.trim(),
       model: target.model.trim(),

@@ -64,7 +64,7 @@ Per-vendor contracts and the adapter authority that constructs them.
 | [`providers/cursor.md`](providers/cursor.md) | Cursor native exec, parameterized models, checkpoints, and active-context usage. |
 | [`providers/google.md`](providers/google.md) | Gemini thought-text, response parts, thought-signature replay, and adjacency repair. |
 | [`providers/kiro.md`](providers/kiro.md) | Kiro parallel-tool hints, Responses text controls, and reasoning round-trip. |
-| [`providers/jev.md`](providers/jev.md) | TypeSafe and self-hosted JEV decision services, the JEV Combo decision request and quota signals, and JEV stats. |
+| [`providers/jev.md`](providers/jev.md) | TypeSafe and self-hosted JEV decision services, the JEV Combo route and level decisions, quota signals, and JEV stats. |
 | [`providers/xai-grok.md`](providers/xai-grok.md) | Grok Build contract parity and hardening. |
 | [`providers/chat-compat.md`](providers/chat-compat.md) | Cross-vendor Chat Completions behavior: reasoning, tool results, structured output, parallel tools. |
 | [`adapters/registry.md`](adapters/registry.md) | The single adapter construction authority and contract inheritance. |

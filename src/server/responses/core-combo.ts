@@ -34,9 +34,11 @@ import {
   jevQuotaDecisionSummary,
   jevQuotaSignalForTarget,
   resolveJevDecision,
+  resolveJevLevelDecision,
   type ComboPick,
   type JevCandidate,
   type JevDecision,
+  type JevLevelDecision,
 } from "../../combos";
 import { formatErrorResponse } from "../../bridge";
 import { SEND_BUDGET_EXHAUSTED_CODE } from "../../lib/errors";
@@ -540,30 +542,50 @@ export async function executeComboResponses(
       return quota ? { ...candidate, quota } : candidate;
     });
     const decisionStartedAt = Date.now();
-    let decision: JevDecision;
+    // Level mode classifies demand only; ocx then selects from the level's candidate list.
+    const levels = combo.decisionMode === "level" ? combo.decisionLevels : undefined;
+    const decisionOptions = {
+      body,
+      candidates,
+      fallback,
+      config,
+      ...(combo.decisionProvider ? { decisionProvider: combo.decisionProvider } : {}),
+      ...(combo.decisionTimeoutMs !== undefined ? { timeoutMs: combo.decisionTimeoutMs } : {}),
+      signal: options.abortSignal,
+    };
+    let decision: JevDecision | JevLevelDecision;
     try {
-      decision = await resolveJevDecision({
-        body,
-        candidates,
-        fallback,
-        config,
-        ...(combo.decisionProvider ? { decisionProvider: combo.decisionProvider } : {}),
-        ...(combo.decisionTimeoutMs !== undefined ? { timeoutMs: combo.decisionTimeoutMs } : {}),
-        signal: options.abortSignal,
-      });
+      decision = levels
+        ? await resolveJevLevelDecision({
+            ...decisionOptions,
+            levels,
+            ...(combo.decisionFallbackLevel ? { fallbackLevel: combo.decisionFallbackLevel } : {}),
+            quotaAware: combo.decisionQuotaSignals === true,
+          })
+        : await resolveJevDecision(decisionOptions);
     } catch (error) {
       if (options.abortSignal?.aborted) return clientCancelledResponse();
       decision = {
         ...fallback,
         gate: "network",
         latencyMs: Math.max(0, Date.now() - decisionStartedAt),
+        ...(levels ? { levelPath: "fail_open" as const } : {}),
       };
     }
     jevDecision = decision;
     const selected = choices.find(choice => choice.candidate.key === decision.targetKey) ?? first;
     pick = { ...selected.pick, attempted: [targetKey(selected.pick.target)] };
-    // Only what the decision request actually carried is logged.
-    const quotaSummary = decision.quotaSent ? jevQuotaDecisionSummary(candidates, selected.candidate.key) : undefined;
+    // In level mode every path above, the catch included, produced a level decision.
+    const levelDecision = levels ? decision as JevLevelDecision : undefined;
+    const levelFields = levelDecision
+      ? { ...(levelDecision.level ? { level: levelDecision.level } : {}), levelPath: levelDecision.levelPath }
+      : {};
+    // Only what the decision request carried (route) or the selection weighed (level) is logged.
+    const quotaSummary = levelDecision
+      ? levelDecision.considered && combo.decisionQuotaSignals === true
+        ? jevQuotaDecisionSummary(levelDecision.considered, selected.candidate.key)
+        : undefined
+      : decision.quotaSent ? jevQuotaDecisionSummary(candidates, selected.candidate.key) : undefined;
     logCtx.jevDecision = normalizePersistedJevDecision({
       version: 1,
       comboId,
@@ -580,6 +602,7 @@ export async function executeComboResponses(
         : {}),
       ...(decision.usage ? { usage: decision.usage } : {}),
       ...(quotaSummary ? { quota: quotaSummary } : {}),
+      ...levelFields,
     });
     console.debug("[combo] JEV decision", {
       targetKey: decision.targetKey,
@@ -592,6 +615,7 @@ export async function executeComboResponses(
         : {}),
       ...(decision.usage ? { usage: decision.usage } : {}),
       ...(quotaSummary ? { quota: quotaSummary } : {}),
+      ...levelFields,
     });
   }
   // One immutable combo selection trace, before any child dispatch; child

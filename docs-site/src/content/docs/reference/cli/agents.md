@@ -135,6 +135,24 @@ row (for example a self-hosted Ollama `tev1`) as the decision service and `--dec
 sets the decision deadline (1000–120000, default 4000); `--decision-quota <on|off|->` sends each
 target's cached remaining-quota tier with the decision; `-` clears any of them.
 
+#### Level mode
+
+`--decision-mode <route|level|->` switches a JEV Combo between the joint target-and-effort decision
+(`route`, the default) and level mode, where the decision service only classifies the next call's
+demand level. `--decision-levels <json|->` sets the per-level candidate lists and
+`--decision-fallback-level <level|->` the level tried when the classified one has nothing usable
+(default `routine`). Omitting a flag keeps the stored value.
+
+```bash
+ocx combo set tev-auto --strategy jev --decision-provider ollama-tev1 --decision-mode level \
+  --targets openai/gpt-6-luna,anthropic/claude-opus-5-5 \
+  --decision-levels '{"routine":{"candidates":[{"provider":"openai","model":"gpt-6-luna","effort":"max"}]},"hard":{"candidates":[{"provider":"anthropic","model":"claude-opus-5-5","effort":"xhigh"}]}}'
+```
+
+`--targets` sets no per-target `reasoningEfforts`, so any valid candidate effort is accepted on save;
+at request time a candidate whose target no longer advertises that effort is skipped. See
+[Level mode](/guides/combos/#level-mode).
+
 See [Combos](/guides/combos/) for routing behavior and configuration guidance.
 
 ## Observability and debug

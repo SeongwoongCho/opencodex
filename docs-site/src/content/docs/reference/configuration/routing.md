@@ -148,7 +148,10 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `displayName?` | `string` | — | Display-only catalog label, required and non-empty for a native alias. |
 | `decisionProvider?` | `string` | `"jev"` | `strategy: "jev"` only. `"jev"` (the same as omitting it, and stored as omission) is the TypeSafe decision service, valid without a provider row; any other value must name a configured provider with `adapter: "jev-decision"` whose `baseUrl` ends in `/systemone`. |
 | `decisionTimeoutMs?` | `number` | `4000` | `strategy: "jev"` only. Decision deadline before failing open, 1000–120000 ms. |
-| `decisionQuotaSignals?` | `boolean` | `false` | `strategy: "jev"` only. Attach each target's remaining-quota tier (from cached provider quota, never a fresh probe) to the decision. |
+| `decisionQuotaSignals?` | `boolean` | `false` | `strategy: "jev"` only. Attach each target's remaining-quota tier (from cached provider quota, never a fresh probe) to the decision. In level mode, prefer healthier tiers when selecting instead. |
+| `decisionMode?` | `"route" \| "level"` | `"route"` | `strategy: "jev"` only. `"level"` asks the decision model only for a demand level and selects from `decisionLevels`. Stored as omission when `"route"`. |
+| `decisionLevels?` | `object` | — | `strategy: "jev"` only; required by `decisionMode: "level"` and kept in route mode. Keys are at least two of `trivial`, `routine`, `hard`, `deep`, `agentic_heavy`, `agentic_light`; values are `{ description?: string, candidates: { provider, model, effort? }[] }` with 1–32 candidates naming Combo targets and efforts those targets allow. |
+| `decisionFallbackLevel?` | level id | `"routine"` | `strategy: "jev"` only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`. |
 
 ```json
 {
@@ -233,6 +236,43 @@ uses the worst of the 5-hour, weekly, monthly, and matching model-family windows
 short clause per option plus an `instructions.quota` line; TypeSafe gets a structured `quota` object
 per criterion (not yet verified against the hosted service). Off, the request is unchanged. See
 [Quota-aware decisions](/guides/combos/#quota-aware-decisions).
+
+### Level mode
+
+`decisionMode: "level"` replaces the joint target-and-effort question with one choice question,
+`questions.level`, whose criteria are the configured level descriptions (the built-in text unless a
+level sets `description`) and whose state carries no target notes. The answer's `choice` must be one
+of the offered levels, and a `probabilities` map, when present, must cover exactly those levels. The
+proxy then selects, synchronously: the first candidate of that level whose target is currently
+eligible and still allows the candidate's effort; with `decisionQuotaSignals: true`, the first healthy
+or unknown-quota candidate, else the first limited one, else a nearly exhausted one. A level with no
+usable candidate tries `decisionFallbackLevel` (default `routine`), then fails open to the first
+eligible target; a failed decision fails open directly. The JEV decision record gains `level` and
+`levelPath` (`chosen`, `fallback_level`, `fail_open`). While a quota-aware level-mode Combo exists, the
+running server refreshes the cached quota rows about every five minutes in the background.
+
+```json
+{
+  "combos": {
+    "tev-auto": {
+      "strategy": "jev",
+      "decisionProvider": "ollama-tev1",
+      "decisionMode": "level",
+      "decisionQuotaSignals": true,
+      "targets": [
+        { "provider": "openai", "model": "gpt-6-luna", "reasoningEfforts": ["low", "max"] },
+        { "provider": "anthropic", "model": "claude-opus-5-5", "reasoningEfforts": ["low", "xhigh"] }
+      ],
+      "decisionLevels": {
+        "routine": { "candidates": [{ "provider": "openai", "model": "gpt-6-luna", "effort": "max" }] },
+        "hard": { "candidates": [{ "provider": "anthropic", "model": "claude-opus-5-5", "effort": "xhigh" }] }
+      }
+    }
+  }
+}
+```
+
+See [Level mode](/guides/combos/#level-mode).
 
 ## Routing policy profiles (`config.routingProfiles`)
 

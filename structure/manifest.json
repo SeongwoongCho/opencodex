@@ -349,7 +349,7 @@
       "path": "providers/jev.md",
       "tier": 4,
       "title": "JEV Decision Provider",
-      "scope": "TypeSafe and self-hosted JEV decision services, the JEV Combo decision request and quota signals, and JEV stats.",
+      "scope": "TypeSafe and self-hosted JEV decision services, the JEV Combo route and level decisions, quota signals, and JEV stats.",
       "documents": [
         "src/combos/"
       ]

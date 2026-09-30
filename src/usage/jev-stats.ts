@@ -1,4 +1,11 @@
-import { JEV_QUOTA_TIERS, type JevQuotaTier } from "../combos/jev-decision-contract";
+import {
+  JEV_LEVEL_IDS,
+  JEV_LEVEL_PATHS,
+  JEV_QUOTA_TIERS,
+  type JevLevelId,
+  type JevLevelPath,
+  type JevQuotaTier,
+} from "../combos/jev-decision-contract";
 import type { OcxComboDefaultEffort } from "../types";
 import type { PersistedUsageEntry } from "./log";
 import { usageDisplayTotalTokens } from "./totals";
@@ -50,6 +57,10 @@ export interface PersistedJevDecisionV1 {
    * Absent when the Combo is not quota-aware or no target had fresh quota evidence.
    */
   quota?: Record<JevQuotaTier, number> & { selected?: JevQuotaTier };
+  /** Level-mode decisions only: the classified demand level, when a decision was applied. */
+  level?: JevLevelId;
+  /** Level-mode decisions only: whether the classified level, the fallback level, or fail-open picked. */
+  levelPath?: JevLevelPath;
 }
 
 export interface JevStatsModelRow {
@@ -160,6 +171,8 @@ function normalizedDecisionUsage(value: unknown): PersistedJevDecisionV1["usage"
 }
 
 const JEV_QUOTA_TIER_SET = new Set<string>(JEV_QUOTA_TIERS);
+const JEV_LEVEL_ID_SET = new Set<string>(JEV_LEVEL_IDS);
+const JEV_LEVEL_PATH_SET = new Set<string>(JEV_LEVEL_PATHS);
 /** A decision offers at most 64 targets; a larger count cannot come from a real decision. */
 const MAX_JEV_QUOTA_TARGETS = 64;
 
@@ -202,6 +215,13 @@ export function normalizePersistedJevDecision(value: unknown): PersistedJevDecis
   const chosenProbability = probability(value.chosenProbability);
   const usage = normalizedDecisionUsage(value.usage);
   const quota = normalizedDecisionQuota(value.quota);
+  const levelPath = typeof value.levelPath === "string" && JEV_LEVEL_PATH_SET.has(value.levelPath)
+    ? value.levelPath as JevLevelPath
+    : undefined;
+  // A level only means something beside the path that consumed it.
+  const level = levelPath && typeof value.level === "string" && JEV_LEVEL_ID_SET.has(value.level)
+    ? value.level as JevLevelId
+    : undefined;
   return {
     version: 1,
     comboId,
@@ -216,6 +236,8 @@ export function normalizePersistedJevDecision(value: unknown): PersistedJevDecis
     ...(chosenProbability !== undefined ? { chosenProbability } : {}),
     ...(usage ? { usage } : {}),
     ...(quota ? { quota } : {}),
+    ...(level ? { level } : {}),
+    ...(levelPath ? { levelPath } : {}),
   };
 }
 
