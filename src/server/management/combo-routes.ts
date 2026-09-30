@@ -222,7 +222,7 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         ? { defaultEffortMode: previous.defaultEffortMode }
         : {}),
       // An API or CLI round-trip of a JEV combo that omits these keeps them; the dashboard sends
-      // both explicitly (null = default). Switching to another strategy drops them rather than
+      // all three explicitly (null/false = default). Switching to another strategy drops them rather than
       // failing validation.
       ...(!Object.hasOwn(requestedCombo, "decisionProvider")
         && previous?.decisionProvider !== undefined
@@ -233,6 +233,11 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         && previous?.decisionTimeoutMs !== undefined
         && requestedCombo.strategy === "jev"
         ? { decisionTimeoutMs: previous.decisionTimeoutMs }
+        : {}),
+      ...(!Object.hasOwn(requestedCombo, "decisionQuotaSignals")
+        && previous?.decisionQuotaSignals !== undefined
+        && requestedCombo.strategy === "jev"
+        ? { decisionQuotaSignals: previous.decisionQuotaSignals }
         : {}),
     };
     const error = comboConfigError(id, effectiveCombo, config.providers, {

@@ -1353,6 +1353,12 @@ export interface OcxComboConfig {
    * whose first call may include a cold model load.
    */
   decisionTimeoutMs?: number;
+  /**
+   * `strategy: "jev"` only: when true, each decision option also carries a short remaining-quota
+   * tier for its target, read synchronously from the cached provider quota reports (the rows
+   * `ocx provider quota` shows). Omitted or false sends today's request unchanged.
+   */
+  decisionQuotaSignals?: boolean;
 }
 
 export type OcxRoutingUnknownEvidenceMode = "allow" | "penalize" | "exclude";

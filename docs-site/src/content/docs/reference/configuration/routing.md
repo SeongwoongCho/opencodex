@@ -148,6 +148,7 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `displayName?` | `string` | — | Display-only catalog label, required and non-empty for a native alias. |
 | `decisionProvider?` | `string` | `"jev"` | `strategy: "jev"` only. `"jev"` (the same as omitting it, and stored as omission) is the TypeSafe decision service, valid without a provider row; any other value must name a configured provider with `adapter: "jev-decision"` whose `baseUrl` ends in `/systemone`. |
 | `decisionTimeoutMs?` | `number` | `4000` | `strategy: "jev"` only. Decision deadline before failing open, 1000–120000 ms. |
+| `decisionQuotaSignals?` | `boolean` | `false` | `strategy: "jev"` only. Attach each target's remaining-quota tier (from cached provider quota, never a fresh probe) to the decision. |
 
 ```json
 {
@@ -221,6 +222,17 @@ model resident (`OLLAMA_KEEP_ALIVE=-1`) and raise `decisionTimeoutMs` for slow s
 [Self-hosted decision model](/guides/combos/#self-hosted-decision-model-eg-ollama-tev1).
 In the dashboard, set both from the JEV Combo's **Decision service** and **Decision timeout (ms)**
 fields under **Models → Combos**.
+
+### Quota-aware JEV decisions
+
+`decisionQuotaSignals: true` adds each target's remaining subscription quota to the decision
+request, so the decision model can avoid nearly exhausted accounts. It reads the cached rows behind
+`ocx provider quota` synchronously (never a probe; rows older than 30 minutes count as unknown) and
+uses the worst of the 5-hour, weekly, monthly, and matching model-family windows. Under 70% used is
+`healthy`, 70% to under 90% `limited`, 90% or more `nearly_exhausted`. Self-hosted services get one
+short clause per option plus an `instructions.quota` line; TypeSafe gets a structured `quota` object
+per criterion (not yet verified against the hosted service). Off, the request is unchanged. See
+[Quota-aware decisions](/guides/combos/#quota-aware-decisions).
 
 ## Routing policy profiles (`config.routingProfiles`)
 

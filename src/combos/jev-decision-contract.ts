@@ -18,3 +18,10 @@ export function isSystemOneEndpoint(baseUrl: string): boolean {
     return false;
   }
 }
+
+/**
+ * Quota tiers a quota-aware JEV decision (`decisionQuotaSignals: true`) may attach to a target,
+ * worst relevant window first: under 70% used, 70% to under 90%, and 90% or more.
+ */
+export const JEV_QUOTA_TIERS = ["healthy", "limited", "nearly_exhausted"] as const;
+export type JevQuotaTier = (typeof JEV_QUOTA_TIERS)[number];

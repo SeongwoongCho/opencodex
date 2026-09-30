@@ -31,6 +31,8 @@ import {
   advanceComboAfterFailure,
   comboFailureCooldownScope,
   JEV_PROVIDER_ID,
+  jevQuotaDecisionSummary,
+  jevQuotaSignalForTarget,
   resolveJevDecision,
   type ComboPick,
   type JevCandidate,
@@ -530,12 +532,19 @@ export async function executeComboResponses(
         ? resolvedFailOpenEffort as OcxComboDefaultEffort
         : null,
     };
+    // Opt-in quota evidence: a synchronous read of cached quota rows, never a probe.
+    const quotaReadAt = Date.now();
+    const candidates = choices.map(({ candidate }) => {
+      if (combo.decisionQuotaSignals !== true) return candidate;
+      const quota = jevQuotaSignalForTarget(candidate.provider, candidate.model, quotaReadAt);
+      return quota ? { ...candidate, quota } : candidate;
+    });
     const decisionStartedAt = Date.now();
     let decision: JevDecision;
     try {
       decision = await resolveJevDecision({
         body,
-        candidates: choices.map(choice => choice.candidate),
+        candidates,
         fallback,
         config,
         ...(combo.decisionProvider ? { decisionProvider: combo.decisionProvider } : {}),
@@ -553,6 +562,8 @@ export async function executeComboResponses(
     jevDecision = decision;
     const selected = choices.find(choice => choice.candidate.key === decision.targetKey) ?? first;
     pick = { ...selected.pick, attempted: [targetKey(selected.pick.target)] };
+    // Only what the decision request actually carried is logged.
+    const quotaSummary = decision.quotaSent ? jevQuotaDecisionSummary(candidates, selected.candidate.key) : undefined;
     logCtx.jevDecision = normalizePersistedJevDecision({
       version: 1,
       comboId,
@@ -568,6 +579,7 @@ export async function executeComboResponses(
         ? { chosenProbability: decision.chosenProbability }
         : {}),
       ...(decision.usage ? { usage: decision.usage } : {}),
+      ...(quotaSummary ? { quota: quotaSummary } : {}),
     });
     console.debug("[combo] JEV decision", {
       targetKey: decision.targetKey,
@@ -579,6 +591,7 @@ export async function executeComboResponses(
         ? { chosenProbability: decision.chosenProbability }
         : {}),
       ...(decision.usage ? { usage: decision.usage } : {}),
+      ...(quotaSummary ? { quota: quotaSummary } : {}),
     });
   }
   // One immutable combo selection trace, before any child dispatch; child

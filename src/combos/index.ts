@@ -68,3 +68,9 @@ export {
   type JevDecision,
   type ResolveJevDecisionOptions,
 } from "./jev";
+export {
+  jevQuotaDecisionSummary,
+  jevQuotaSignalForTarget,
+  type JevQuotaDecisionSummary,
+  type JevQuotaSignal,
+} from "./jev-quota";

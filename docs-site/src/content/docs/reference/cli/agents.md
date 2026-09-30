@@ -132,7 +132,8 @@ Account-qualified OpenAI routes remain distinct, while provider-qualified routes
 Read the safety and visibility contract in the guide before enabling the compatibility pair.
 With `--strategy jev` only, `--decision-provider <provider|->` names a configured `jev-decision`
 row (for example a self-hosted Ollama `tev1`) as the decision service and `--decision-timeout <ms|->`
-sets the decision deadline (1000–120000, default 4000); `-` clears either one.
+sets the decision deadline (1000–120000, default 4000); `--decision-quota <on|off|->` sends each
+target's cached remaining-quota tier with the decision; `-` clears any of them.
 
 See [Combos](/guides/combos/) for routing behavior and configuration guidance.
 

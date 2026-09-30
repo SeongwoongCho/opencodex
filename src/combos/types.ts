@@ -68,6 +68,8 @@ export interface NormalizedComboConfig {
   decisionProvider?: string;
   /** JEV decision deadline override; absent keeps the default four-second deadline. */
   decisionTimeoutMs?: number;
+  /** JEV remaining-quota signals opt-in; present only when enabled. */
+  decisionQuotaSignals?: true;
   targets: NormalizedComboTarget[];
 }
 
@@ -326,6 +328,13 @@ export function comboConfigIssues(
       issues.push({ path: ["decisionTimeoutMs"], message: 'decisionTimeoutMs is only valid with strategy "jev"' });
     }
   }
+  if (body.decisionQuotaSignals !== undefined && body.decisionQuotaSignals !== null) {
+    if (typeof body.decisionQuotaSignals !== "boolean") {
+      issues.push({ path: ["decisionQuotaSignals"], message: "decisionQuotaSignals must be a boolean" });
+    } else if (body.strategy !== "jev") {
+      issues.push({ path: ["decisionQuotaSignals"], message: 'decisionQuotaSignals is only valid with strategy "jev"' });
+    }
+  }
 
   if (!Array.isArray(body.targets) || body.targets.length === 0) {
     issues.push({ path: ["targets"], message: "targets must be a non-empty array" });
@@ -469,6 +478,8 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
     // Explicit "jev" is the default and stays sparse.
     ...(decisionProvider && decisionProvider !== CANONICAL_JEV_DECISION_PROVIDER ? { decisionProvider } : {}),
     ...(typeof raw.decisionTimeoutMs === "number" ? { decisionTimeoutMs: raw.decisionTimeoutMs } : {}),
+    // Off is the default and stays sparse.
+    ...(raw.decisionQuotaSignals === true ? { decisionQuotaSignals: true as const } : {}),
     targets: raw.targets.map(target => ({
       provider: target.provider.trim(),
       model: target.model.trim(),

@@ -346,6 +346,15 @@
       ]
     },
     {
+      "path": "providers/jev.md",
+      "tier": 4,
+      "title": "JEV Decision Provider",
+      "scope": "TypeSafe and self-hosted JEV decision services, the JEV Combo decision request and quota signals, and JEV stats.",
+      "documents": [
+        "src/combos/"
+      ]
+    },
+    {
       "path": "providers/xai-grok.md",
       "tier": 4,
       "title": "xAI Grok Provider",

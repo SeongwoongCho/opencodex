@@ -861,6 +861,38 @@ describe("headless GUI parity CLI", () => {
     }
   });
 
+  test("combo set toggles JEV quota signals with on/off, clears with -, and rejects other strategies", async () => {
+    const runtime = fakeRuntime();
+    for (const value of ["on", "off", "-"]) {
+      expect(await handleComboCommand([
+        "set", "jev-local", "--targets", "openai/gpt-6-astra,openai/gpt-5.6-sol", "--strategy", "jev",
+        "--decision-quota", value, "--json",
+      ], runtime.deps)).toBe(0);
+    }
+    const puts = runtime.requests.filter(request => request.method === "PUT").map(request => request.body as { combo: Record<string, unknown> });
+    expect(puts.map(put => put.combo.decisionQuotaSignals)).toEqual([true, false, null]);
+    expect(await handleComboCommand([
+      "set", "jev-local", "--targets", "openai/gpt-6-astra", "--strategy", "jev", "--json",
+    ], runtime.deps)).toBe(0);
+    const last = runtime.requests.filter(request => request.method === "PUT").at(-1)!.body as { combo: Record<string, unknown> };
+    expect(last.combo).not.toHaveProperty("decisionQuotaSignals");
+
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      for (const args of [
+        ["--decision-quota", "on"],
+        ["--strategy", "round-robin", "--decision-quota", "off"],
+        ["--strategy", "jev", "--decision-quota", "yes"],
+      ]) {
+        const rejected = fakeRuntime();
+        expect(await handleComboCommand(["set", "demo", "--targets", "a/m1", ...args], rejected.deps)).toBe(2);
+        expect(rejected.requests).toEqual([]);
+      }
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   test("combo set exposes the opt-in force-default policy", async () => {
     const runtime = fakeRuntime();
     expect(await handleComboCommand([

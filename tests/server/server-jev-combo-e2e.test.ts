@@ -10,6 +10,7 @@ import { executeComboResponses } from "../../src/server/responses/core-combo";
 import type { ResponsesDispatchers } from "../../src/server/responses/core-options";
 import type { RequestLogContext } from "../../src/server/request-log";
 import { handleManagementAPI } from "../../src/server/management-api";
+import { clearCachedProviderQuotas, setCachedProviderQuotaForTests } from "../../src/providers/quota-routing-cache";
 import type { OcxConfig, OcxProviderConfig } from "../../src/types";
 import { catalogConvergenceFactory } from "../helpers/catalog-convergence";
 import { ManagementRequest } from "../helpers/management-auth";
@@ -599,5 +600,72 @@ describe("JEV Combo runtime", () => {
 
     expect(response.status).toBe(499);
     expect(modelDispatches).toBe(0);
+  });
+});
+
+describe("JEV Combo quota signals", () => {
+  afterEach(() => clearCachedProviderQuotas());
+
+  const seedQuota = () => {
+    const now = Date.now();
+    setCachedProviderQuotaForTests("astra", { weeklyPercent: 98, weeklyResetAt: now + 3 * 86_400_000, updatedAt: now - 60_000 });
+    setCachedProviderQuotaForTests("sol", { fiveHourPercent: 13, weeklyPercent: 40, updatedAt: now - 60_000 });
+    // Luna's row is past the staleness bound: no clause for it.
+    setCachedProviderQuotaForTests("luna", { weeklyPercent: 5, updatedAt: now - 31 * 60_000 });
+  };
+
+  test("off (default) sends the byte-identical request even when cached quota exists", async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const config = makeConfig({ jevFetch: choiceFetch("sol/gpt-5.6-sol:high", seen) });
+    const quietLog: RequestLogContext = { model: "", provider: "" };
+    await execute(config, body => success(String(body.model)), {}, undefined, quietLog);
+    seedQuota();
+    await execute(config, body => success(String(body.model)), {}, undefined, quietLog);
+    config.combos!.auto!.decisionQuotaSignals = false;
+    await execute(config, body => success(String(body.model)), {}, undefined, quietLog);
+
+    expect(seen).toHaveLength(3);
+    expect(JSON.stringify(seen[1])).toBe(JSON.stringify(seen[0]));
+    expect(JSON.stringify(seen[2])).toBe(JSON.stringify(seen[0]));
+    expect(JSON.stringify(seen[0])).not.toContain("uota");
+    expect(quietLog.jevDecision).not.toHaveProperty("quota");
+  });
+
+  test("on attaches each target's tier and logs only the tier summary", async () => {
+    seedQuota();
+    const seen: Array<Record<string, unknown>> = [];
+    const config = makeConfig({ jevFetch: choiceFetch("sol/gpt-5.6-sol:high", seen) });
+    config.combos!.auto!.decisionQuotaSignals = true;
+    const parentLogCtx: RequestLogContext = { model: "", provider: "" };
+
+    const response = await execute(config, body => success(String(body.model)), {}, undefined, parentLogCtx);
+
+    expect(response.status).toBe(200);
+    const route = (seen[0]!.questions as {
+      route: { instructions: Record<string, unknown>; criteria: Record<string, Record<string, unknown>> };
+    }).route;
+    expect(route.instructions.quota).toEqual(expect.stringContaining("prefer ones whose quota tier is healthy"));
+    expect(route.criteria["astra/gpt-6-astra:high"]!.quota).toEqual({
+      tier: "nearly_exhausted", used_percent: 98, window: "weekly", resets_in_seconds: expect.any(Number),
+    });
+    expect(route.criteria["sol/gpt-5.6-sol:low"]!.quota).toEqual({ tier: "healthy", used_percent: 40, window: "weekly" });
+    expect(route.criteria["luna/gpt-5.6-luna:low"]).not.toHaveProperty("quota");
+    expect(parentLogCtx.jevDecision).toMatchObject({
+      selected: { provider: "sol", model: "gpt-5.6-sol", effort: "high" },
+      gate: "apply",
+      quota: { healthy: 1, limited: 0, nearly_exhausted: 1, selected: "healthy" },
+    });
+  });
+
+  test("on without any fresh quota sends today's request and logs no summary", async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const config = makeConfig({ jevFetch: choiceFetch("sol/gpt-5.6-sol:high", seen) });
+    await execute(config, body => success(String(body.model)));
+    config.combos!.auto!.decisionQuotaSignals = true;
+    const parentLogCtx: RequestLogContext = { model: "", provider: "" };
+    await execute(config, body => success(String(body.model)), {}, undefined, parentLogCtx);
+
+    expect(JSON.stringify(seen[1])).toBe(JSON.stringify(seen[0]));
+    expect(parentLogCtx.jevDecision).not.toHaveProperty("quota");
   });
 });

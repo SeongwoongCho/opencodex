@@ -19,7 +19,7 @@ const USAGE = `Usage:
       [--effort <low|medium|high|xhigh|max|ultra|->] [--effort-mode <fallback|force>]
       (force overrides valid client effort and can increase cost/latency) [--alias <name|->]
       [--native-alias] [--display-name <label|->]
-      [--decision-provider <provider|->] [--decision-timeout <ms|->]
+      [--decision-provider <provider|->] [--decision-timeout <ms|->] [--decision-quota <on|off|->]
       (jev only; the provider must be a configured jev-decision row)
       [--rename-from <id>] [--json]
   ocx combo remove <id> --yes [--json]`;
@@ -112,6 +112,13 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
       throw new CliUsageError("--decision-timeout applies only to the jev strategy", USAGE);
     }
   }
+  const decisionQuota = takeOption(args, "--decision-quota");
+  if (decisionQuota !== undefined && decisionQuota !== "on" && decisionQuota !== "off" && decisionQuota !== "-") {
+    throw new CliUsageError("--decision-quota must be on, off, or -", USAGE);
+  }
+  if ((decisionQuota === "on" || decisionQuota === "off") && strategy !== "jev") {
+    throw new CliUsageError("--decision-quota applies only to the jev strategy", USAGE);
+  }
   const renameFrom = takeOption(args, "--rename-from");
   rejectArgs(args, USAGE);
   const combo: Record<string, unknown> = {
@@ -126,6 +133,7 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (displayName !== undefined) combo.displayName = displayName === "-" ? "" : displayName;
   if (decisionProvider !== undefined) combo.decisionProvider = decisionProvider === "-" ? null : decisionProvider;
   if (decisionTimeoutMs !== undefined) combo.decisionTimeoutMs = decisionTimeoutMs;
+  if (decisionQuota !== undefined) combo.decisionQuotaSignals = decisionQuota === "-" ? null : decisionQuota === "on";
   const current = await runtimeRequest<{ combos?: ComboRow[] }>("/api/combos", {}, deps);
   const existing = (current.combos ?? []).find(row => row.id === (renameFrom ?? id));
   if (existing?.imageInput === "disabled") combo.imageInput = "disabled";

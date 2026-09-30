@@ -17,6 +17,13 @@ import {
   JEV_DECISION_TIMEOUT_MIN_MS,
   JEV_MAX_CANDIDATE_FIELD_CHARS,
 } from "./types";
+import {
+  JEV_QUOTA_INSTRUCTION_DESCRIPTIVE,
+  JEV_QUOTA_INSTRUCTION_STRUCTURED,
+  jevQuotaClause,
+  jevQuotaCriterion,
+  type JevQuotaSignal,
+} from "./jev-quota";
 
 export const JEV_PROVIDER_ID = "jev";
 export const JEV_API_URL = "https://api.typesafe.ai/v1/systemone";
@@ -89,6 +96,11 @@ export interface JevCandidate {
   reasoningEfforts: readonly OcxComboDefaultEffort[];
   /** Optional operator note sent as decision evidence for this target only. */
   modelProfile?: string;
+  /**
+   * Remaining-quota evidence, set only by a Combo with `decisionQuotaSignals: true` and only
+   * when fresh cached quota exists. Absent leaves the decision request byte-identical.
+   */
+  quota?: JevQuotaSignal;
 }
 
 export interface JevDecision {
@@ -99,6 +111,8 @@ export interface JevDecision {
   confidence?: number;
   chosenProbability?: number;
   usage?: Record<string, number>;
+  /** True when the posted request carried quota signals (absent when none were sent). */
+  quotaSent?: true;
 }
 
 export interface ResolveJevDecisionOptions {
@@ -469,11 +483,12 @@ function modelProfile(candidate: JevCandidate): string {
     ?? "Configured target with capability unspecified by JEV; judge it only from the supplied request evidence.";
 }
 
-function criterionDescription(criterion: JevRouteOption["criterion"]): string {
+function criterionDescription(criterion: JevRouteOption["criterion"], quota: JevQuotaSignal | undefined): string {
   const effort = criterion.reasoning_effort
     ? `${criterion.reasoning_effort} reasoning effort`
     : "no reasoning-effort control";
-  return `Target ${criterion.target} (provider ${criterion.provider}, model ${criterion.model}) with ${effort}.`;
+  const base = `Target ${criterion.target} (provider ${criterion.provider}, model ${criterion.model}) with ${effort}.`;
+  return quota ? `${base}${jevQuotaClause(quota)}` : base;
 }
 
 /**
@@ -488,9 +503,16 @@ export function buildJevRouteQuestion(
   options: { descriptiveCriteria?: boolean } = {},
 ): Record<string, unknown> {
   const routeOptions = candidateOptions(candidates);
+  // Quota evidence rides INSIDE each option: measured with tev1, the same facts placed only in
+  // model_profiles barely moved a decision, while a per-option tier clause did.
+  const quotaByKey = new Map<string, JevQuotaSignal>();
+  for (const candidate of candidates) if (candidate.quota) quotaByKey.set(candidate.key, candidate.quota);
   const criteria: Record<string, unknown> = {};
   for (const [choice, option] of routeOptions) {
-    criteria[choice] = options.descriptiveCriteria ? criterionDescription(option.criterion) : option.criterion;
+    const quota = quotaByKey.get(option.targetKey);
+    criteria[choice] = options.descriptiveCriteria
+      ? criterionDescription(option.criterion, quota)
+      : quota ? { ...option.criterion, quota: jevQuotaCriterion(quota) } : option.criterion;
   }
   const modelProfiles: Record<string, string> = {};
   for (const candidate of candidates) modelProfiles[candidate.key] = modelProfile(candidate);
@@ -505,6 +527,9 @@ export function buildJevRouteQuestion(
         model_profiles: modelProfiles,
         effort_profiles: EFFORT_PROFILES,
         speed: "Every option uses standard speed. Fast mode is unavailable.",
+        ...(quotaByKey.size > 0
+          ? { quota: options.descriptiveCriteria ? JEV_QUOTA_INSTRUCTION_DESCRIPTIVE : JEV_QUOTA_INSTRUCTION_STRUCTURED }
+          : {}),
       },
       criteria,
     },
@@ -680,8 +705,11 @@ function jevDecisionEndpoint(config: OcxConfig, decisionProvider: string): JevDe
 export async function resolveJevDecision(options: ResolveJevDecisionOptions): Promise<JevDecision> {
   const now = options.now ?? Date.now;
   const startedAt = now();
-  const failed = (gate: Exclude<JevDecision["gate"], "apply">): JevDecision =>
-    fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt));
+  let quotaSent = false;
+  const failed = (gate: Exclude<JevDecision["gate"], "apply">): JevDecision => ({
+    ...fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt)),
+    ...(quotaSent ? { quotaSent: true as const } : {}),
+  });
 
   if (options.signal?.aborted) throw options.signal.reason;
   if (options.candidates.length === 0) return failed("no_choices");
@@ -701,12 +729,24 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
     }
     const state = buildJevState(options.body, options.candidates);
     if (!hasJevDecisionState(state)) return failed("no_state");
-    requestBody = JSON.stringify({
+    const serialize = (candidates: readonly JevCandidate[]) => JSON.stringify({
       model: endpoint.model,
       state,
-      questions: buildJevRouteQuestion(options.candidates, { descriptiveCriteria: endpoint.descriptiveCriteria }),
+      questions: buildJevRouteQuestion(candidates, { descriptiveCriteria: endpoint.descriptiveCriteria }),
     });
-    if (new TextEncoder().encode(requestBody).byteLength > JEV_MAX_REQUEST_BYTES) return failed("invalid");
+    const fits = (body: string) => new TextEncoder().encode(body).byteLength <= JEV_MAX_REQUEST_BYTES;
+    requestBody = serialize(options.candidates);
+    const withQuota = options.candidates.some(candidate => candidate.quota !== undefined);
+    if (!fits(requestBody) && withQuota) {
+      // Quota evidence is optional: a large Combo that only overflows because of it still gets a
+      // decision, just without the quota clauses.
+      requestBody = serialize(options.candidates.map(({ quota: _quota, ...candidate }) => candidate));
+      if (!fits(requestBody)) return failed("invalid");
+    } else if (!fits(requestBody)) {
+      return failed("invalid");
+    } else {
+      quotaSent = withQuota;
+    }
   } catch {
     return failed("invalid");
   }
@@ -773,6 +813,7 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
       ...parsed,
       gate: "apply",
       latencyMs: Math.max(0, now() - startedAt),
+      ...(quotaSent ? { quotaSent: true as const } : {}),
     };
   } catch (error) {
     if (options.signal?.aborted) throw options.signal.reason;

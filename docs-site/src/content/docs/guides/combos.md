@@ -341,6 +341,36 @@ service** and **Decision timeout (ms)** fields; **Create JEV Auto** on a self-ho
 (disabled, a `baseUrl` not ending in `/systemone`, or no model) are listed with the reason and
 cannot be picked.
 
+#### Quota-aware decisions
+
+Set `"decisionQuotaSignals": true` on a JEV Combo (dashboard: **Consider remaining account quota**;
+CLI: `--decision-quota on`) to tell the decision model how much subscription quota each target has
+left, so it steers away from nearly exhausted accounts. It is off by default, and while off the
+decision request is byte-for-byte what it was before.
+
+- The quota comes from the cached provider quota rows that `ocx provider quota` and the dashboard
+  **Providers** page show, read without any network call: for a ChatGPT/Codex account pool the pool
+  aggregate (or the effective account when there is no aggregate), for other OAuth providers the
+  active account, for key providers the active key. OpenCodex never probes quota for a decision, so
+  the data exists only while something keeps those rows fresh (the Providers page, `ocx provider
+  quota`, or the quota reset poller when quota reset notifications are on).
+- Per target, the worst relevant window counts: 5-hour, weekly and monthly meters, plus a
+  model-family window (such as Anthropic's Fable weekly window) when the model belongs to that
+  family. Other custom meters and credit balances are ignored. Rows older than 30 minutes, windows
+  whose reset has passed, and targets with no data send nothing for that target.
+- Tiers: under 70% used is **healthy**, 70% to under 90% **limited**, 90% or more **nearly
+  exhausted**. A self-hosted decision service gets one short clause at the end of each option, for
+  example `Quota limited (78% of weekly used, resets in 2h).` or `QUOTA NEARLY EXHAUSTED (98% of
+  weekly used, resets in 3d): choose only if no alternative is adequate.`, plus one
+  `instructions.quota` line when at least one target has data. Canonical TypeSafe gets the same
+  facts as a structured `quota` object (`tier`, `used_percent`, `window`, `resets_in_seconds`) on each
+  criterion; that shape has not been verified against the hosted TypeSafe service.
+- The signal is advice to the decision model only. It never makes a target ineligible (exhausted
+  targets are already skipped by the ordinary quota check), and if the extra text would push a very
+  large Combo over the 64 KiB decision request limit, the decision is sent without it.
+- The JEV decision log records only how many targets were sent in each tier and the picked target's
+  tier, never account ids or emails.
+
 For each JEV target, **Models → Combos → Config** has an optional **Additional model notes for JEV**
 field (up to 512 characters; line breaks and tabs are allowed, other control characters are rejected). It is stored as `targets[].modelProfile` in the combo config. The
 built-in target profile remains in the trusted `instructions.model_profiles`; a non-empty note is
@@ -599,8 +629,9 @@ Open the local dashboard and choose **Models → Combos**. The workspace creates
 combos, and its target picker excludes disabled models, nested combos, and the credential-only JEV
 provider. **Create JEV Auto** opens the same Combo editor with an editable decision target template;
 an existing `jev-auto` id or alias is reported instead of creating a duplicate. A JEV Combo also shows
-**Decision service** (TypeSafe JEV or a configured `jev-decision` provider) and **Decision timeout
-(ms)**, and the Combos overview lists each JEV Combo's decision service, endpoint, and timeout.
+**Decision service** (TypeSafe JEV or a configured `jev-decision` provider), **Decision timeout
+(ms)**, and **Consider remaining account quota**, and the Combos overview lists each JEV Combo's
+decision service, endpoint, and timeout, marking quota-aware Combos **Quota-aware**.
 
 Each target also shows a live quota badge: **Available**, **Out of quota**, or **Quota unknown**. The editor blocks Save and Create for quota only when every usable target has a current server-confirmed exhausted inference limit for its configured credential. Display-only account, model, search and MCP quota, or missing or expired routing evidence, does not cause this block. The block expires at the applicable reset or freshness boundary and is rechecked when the page becomes active or visible; Refresh reloads both Combo data and quota. The dashboard
 editor does not yet expose `cooldownMs` or `waitForCooldownMs`; use the configuration file or management
@@ -618,9 +649,10 @@ ocx combo remove <id> --yes
 ```
 
 `set` also accepts `--strategy`, `--sticky`, `--effort`, `--alias`, `--native-alias`,
-`--display-name`, `--decision-provider`, `--decision-timeout`, and `--rename-from`. Use `-` as the
-value of `--effort`, `--alias`, `--display-name`, `--decision-provider`, or `--decision-timeout` to
-clear that field. The two decision flags apply only to `--strategy jev`. `--native-alias` requires a currently supported bare native
+`--display-name`, `--decision-provider`, `--decision-timeout`, `--decision-quota <on|off|->`, and
+`--rename-from`. Use `-` as the value of `--effort`, `--alias`, `--display-name`, `--decision-provider`,
+`--decision-timeout`, or `--decision-quota` to clear that field. The decision flags apply only to
+`--strategy jev`. `--native-alias` requires a currently supported bare native
 model alias and a non-empty display name. `create` and `update` are aliases for `set`; `delete` is an alias for
 `remove`; and the same subcommands are available under `ocx route combo`.
 
@@ -636,10 +668,10 @@ the request-rate fallback. A stored `cooldownMs` can only be removed by editing 
 `waitForCooldownMs` resets to its default when a `PUT` explicitly sends `0`, because the sparse
 serializer omits that default. Omission preserves both values and the dashboard does not expose them yet.
 Omitting `defaultEffortMode`, `reasoningEffortMode`, `imageInput`, or `cooldownWaitPolicy` likewise
-keeps the stored value, as does omitting `decisionProvider` or `decisionTimeoutMs` while the request
-keeps `strategy: "jev"` (a different strategy drops them), and a re-sent target without `lastResort` keeps that target's flag (matched by
+keeps the stored value, as does omitting `decisionProvider`, `decisionTimeoutMs`, or
+`decisionQuotaSignals` while the request keeps `strategy: "jev"` (a different strategy drops them), and a re-sent target without `lastResort` keeps that target's flag (matched by
 provider and model). The dashboard always sends `imageInput` and `reasoningEffortMode`, and for a JEV
-Combo `decisionProvider` and `decisionTimeoutMs` (`null` for the default), so switching them back to
+Combo `decisionProvider`, `decisionTimeoutMs` (`null` for the default), and `decisionQuotaSignals`, so switching them back to
 the default there still replaces the stored value.
 
 For the complete persisted configuration, see [Configuration](/reference/configuration/).
@@ -684,6 +716,7 @@ Combos are stored in the top-level `combos` object, keyed by combo id:
 | `displayName` | No | none | Bounded display-only catalog label. Required and non-empty when `nativeAlias` is true. |
 | `decisionProvider` | No | `"jev"` | JEV only. Provider id of the decision service: `"jev"` (TypeSafe, valid without a provider row; the same as omission) or a configured `adapter: "jev-decision"` row with a `/systemone` `baseUrl`, such as a self-hosted Ollama `tev1`. |
 | `decisionTimeoutMs` | No | `4000` | JEV only. Integer from 1000 to 120000: the decision deadline before failing open to the first eligible target. |
+| `decisionQuotaSignals` | No | `false` | JEV only. Send each target's cached remaining-quota tier with the decision; see [Quota-aware decisions](#quota-aware-decisions). |
 
 ## Troubleshooting
 
