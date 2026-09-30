@@ -275,6 +275,39 @@ describe("JEV decisionProvider management round-trip", () => {
     });
   });
 
+  test("a provider PATCH cannot break a combo's decision provider; disabling it still can", async () => {
+    await withTempHome(async () => {
+      saveConfig(config({ custom: { strategy: "jev", targets, decisionProvider: "ollama-tev1" } }));
+      const cfg = loadConfig();
+      const before = readFileSync(getConfigPath(), "utf8");
+
+      const adapter = await api(cfg, "PATCH", "/api/providers?name=ollama-tev1", { adapter: "openai-chat" });
+      expect(adapter.status).toBe(400);
+      expect((await adapter.json() as { error: string }).error).toContain(
+        'combos.custom.decisionProvider: decisionProvider "ollama-tev1" is not a decision service',
+      );
+      const endpoint = await api(cfg, "PATCH", "/api/providers?name=ollama-tev1", {
+        baseUrl: "http://127.0.0.1:11434/v1",
+      });
+      expect(endpoint.status).toBe(400);
+      expect((await endpoint.json() as { error: string }).error).toContain(
+        'combos.custom.decisionProvider: decisionProvider "ollama-tev1" baseUrl must be the full decision endpoint',
+      );
+      expect(cfg.providers["ollama-tev1"]).toMatchObject({ adapter: "jev-decision", baseUrl: selfHostedRow.baseUrl });
+      expect(readFileSync(getConfigPath(), "utf8")).toBe(before);
+
+      // Runtime fails open for an unusable row, so these stay allowed.
+      const moved = await api(cfg, "PATCH", "/api/providers?name=ollama-tev1", {
+        baseUrl: "http://127.0.0.1:11435/v1/systemone",
+      });
+      expect(moved.status).toBe(200);
+      const disabled = await api(cfg, "PATCH", "/api/providers?name=ollama-tev1", { disabled: true });
+      expect(disabled.status).toBe(200);
+      expect(cfg.providers["ollama-tev1"]?.disabled).toBe(true);
+      expect(cfg.combos?.custom).toMatchObject({ decisionProvider: "ollama-tev1" });
+    });
+  });
+
   test("a retargeted jev row is not probed, so its stored key is never sent", async () => {
     const seen: string[] = [];
     const server = Bun.serve({

@@ -1490,6 +1490,11 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
     const next = applied.next;
 
     const pacingOnly = keys.every(key => key === "requestPacing");
+    // A combo naming this row as its decisionProvider is only as valid as the row: an adapter
+    // or baseUrl edit could fail the combo's load-time checks and get it salvaged away on the
+    // next reload. Disabling the row stays allowed (not editorTouched; runtime fails open).
+    const decisionDependent = () => Object.values(config.combos ?? {})
+      .some(combo => typeof combo.decisionProvider === "string" && combo.decisionProvider.trim() === name);
     if (applied.editorTouched && !pacingOnly) {
       const providerError = canonicalBudgetOnly
         ? canonicalOpenAiBudgetPatchError(next, rawBody, keys, config)
@@ -1514,6 +1519,10 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
         const allowBenchmarkAddresses = name === "openai" && isCanonicalOpenAiForwardProvider(next);
         const resolvedError = await providerDestinationResolvedError(name, next, { allowBenchmarkAddresses });
         if (resolvedError) return jsonResponse({ error: resolvedError }, 400);
+      }
+      if (decisionDependent()) {
+        const validation = validateConfigCandidate({ ...config, providers: { ...config.providers, [name]: next } });
+        if (!validation.ok) return jsonResponse({ error: validation.error }, 400);
       }
     } else if (applied.enablingOpenAi) {
       // Same DNS gate as POST: Clash fake-IP only. Never honor a persisted
@@ -1569,7 +1578,7 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
       // registry static headers, so exact-match stripping must not erase them again.
       const candidate = replay.headersTouched ? replay.next : stripRegistryOnlyStaticHeaders(name, replay.next);
       const pinsTouched = Object.hasOwn(rawBody, "pinnedReasoningEffort") || Object.hasOwn(rawBody, "modelPinnedReasoningEfforts");
-      if (pinsTouched) {
+      if (pinsTouched || (replay.editorTouched && !pacingOnly && decisionDependent())) {
         const validation = validateConfigCandidate({ ...config, providers: { ...config.providers, [name]: candidate } });
         if (!validation.ok) { replayError = validation.error; return; }
       }
