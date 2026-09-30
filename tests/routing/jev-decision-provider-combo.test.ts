@@ -137,6 +137,50 @@ describe("JEV decisionProvider combo validation", () => {
   });
 });
 
+describe("JEV decisionProvider usability at save time", () => {
+  const rows = () => ({
+    ...providers(),
+    off: { ...selfHostedRow, disabled: true },
+    nomodel: { ...selfHostedRow, defaultModel: " ", models: [] },
+    listed: { ...selfHostedRow, defaultModel: undefined, models: ["tev1:4b"] },
+  });
+
+  test("config-file validation stays lenient; save-time validation rejects rows the runtime would skip", () => {
+    const strict = { requireUsableDecisionService: true };
+    for (const id of ["off", "nomodel", "listed"]) {
+      expect(comboConfigIssues("auto", { strategy: "jev", targets, decisionProvider: id }, rows())).toEqual([]);
+    }
+    expect(comboConfigIssues("auto", { strategy: "jev", targets, decisionProvider: "off" }, rows(), strict)).toEqual([
+      { path: ["decisionProvider"], message: 'decisionProvider "off" is disabled' },
+    ]);
+    expect(comboConfigIssues("auto", { strategy: "jev", targets, decisionProvider: "nomodel" }, rows(), strict)).toEqual([
+      { path: ["decisionProvider"], message: 'decisionProvider "nomodel" has no model (set defaultModel or models)' },
+    ]);
+    expect(comboConfigIssues("auto", { strategy: "jev", targets, decisionProvider: "listed" }, rows(), strict)).toEqual([]);
+    expect(comboConfigIssues("auto", { strategy: "jev", targets, decisionProvider: "jev" }, rows(), strict)).toEqual([]);
+  });
+
+  test("the management API refuses a disabled or model-less decision provider", async () => {
+    await withTempHome(async () => {
+      const cfg = { ...config(), providers: rows() };
+      saveConfig(cfg);
+      const disabled = await api(cfg, "PUT", "/api/combos", {
+        id: "auto", combo: { strategy: "jev", targets, decisionProvider: "off" },
+      });
+      expect(disabled.status).toBe(400);
+      expect(await disabled.json()).toEqual({ error: 'decisionProvider "off" is disabled' });
+      const modelless = await api(cfg, "PUT", "/api/combos", {
+        id: "auto", combo: { strategy: "jev", targets, decisionProvider: "nomodel" },
+      });
+      expect(modelless.status).toBe(400);
+      expect(await modelless.json()).toEqual({
+        error: 'decisionProvider "nomodel" has no model (set defaultModel or models)',
+      });
+      expect(cfg.combos?.auto).toBeUndefined();
+    });
+  });
+});
+
 describe("JEV decisionProvider management round-trip", () => {
   test("a dashboard-shaped save keeps the decision provider and timeout; another strategy drops them", async () => {
     await withTempHome(async () => {

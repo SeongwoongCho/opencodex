@@ -25,8 +25,8 @@ export interface JevDecisionRow {
 }
 
 /**
- * Why a self-hosted decision service is unusable. `missing`, `notDecision` and `endpoint` are
- * rejected by the server; `disabled` and `model` are accepted but skipped at request time.
+ * Why a self-hosted decision service is unusable. The management API rejects every issue on save;
+ * config-file load rejects only `missing`, `notDecision` and `endpoint` (the runtime skips the rest).
  */
 export type JevDecisionIssue = "missing" | "notDecision" | "disabled" | "endpoint" | "model";
 

@@ -118,6 +118,11 @@ export function comboAliasIssues(
 
 export interface ComboValidationOptions {
   requireEnabledTarget?: boolean;
+  /**
+   * Save-time only: also reject a `decisionProvider` row the runtime would skip (disabled, or no
+   * model). Config-file load stays lenient so disabling a referenced row never breaks startup.
+   */
+  requireUsableDecisionService?: boolean;
   /** Full combos map for alias uniqueness checks; omitted during early config load. */
   combos?: Record<string, OcxComboConfig>;
   /** Combo being renamed — its stored alias is excluded from uniqueness checks. */
@@ -294,6 +299,18 @@ export function comboConfigIssues(
       issues.push({
         path: ["decisionProvider"],
         message: `decisionProvider "${decisionProvider}" baseUrl must be the full decision endpoint ending in /systemone`,
+      });
+    } else if (options.requireUsableDecisionService && providers[decisionProvider]?.disabled === true) {
+      issues.push({
+        path: ["decisionProvider"],
+        message: `decisionProvider "${decisionProvider}" is disabled`,
+      });
+    } else if (options.requireUsableDecisionService
+      && !providers[decisionProvider]?.defaultModel?.trim()
+      && !providers[decisionProvider]?.models?.[0]?.trim()) {
+      issues.push({
+        path: ["decisionProvider"],
+        message: `decisionProvider "${decisionProvider}" has no model (set defaultModel or models)`,
       });
     }
   }

@@ -237,6 +237,7 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
     };
     const error = comboConfigError(id, effectiveCombo, config.providers, {
       requireEnabledTarget: true,
+      requireUsableDecisionService: true,
       combos: config.combos,
       excludeComboId: sourceId,
     });
