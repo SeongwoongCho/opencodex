@@ -1,7 +1,16 @@
 import { useState } from "react";
 import type { ComboEffort, ComboStrategy, ComboTarget, ProviderQuotaStates } from "../combo-workspace-data";
 import { comboImagesSupported } from "../combo-capabilities";
-import { COMBO_EFFORTS, COMBO_STRATEGIES, COMBO_STRATEGY_LABEL_KEYS, newComboTarget } from "../combo-workspace-data";
+import {
+  COMBO_EFFORTS,
+  COMBO_STRATEGIES,
+  COMBO_STRATEGY_LABEL_KEYS,
+  JEV_DECISION_TIMEOUT_DEFAULT_MS,
+  JEV_DECISION_TIMEOUT_MAX_MS,
+  JEV_DECISION_TIMEOUT_MIN_MS,
+  jevDecisionServiceOptions,
+  newComboTarget,
+} from "../combo-workspace-data";
 import { IconArrowDown, IconArrowUp, IconGrip, IconPlus, IconTrash } from "../icons";
 import { useT } from "../i18n/shared";
 import { Switch } from "../ui";
@@ -138,6 +147,85 @@ export function ComboCapabilities({
         />
       </div>
     </section>
+  );
+}
+
+/** JEV-only decision service and deadline; callers render it only for `strategy: "jev"`. */
+export function JevDecisionFields({
+  idPrefix,
+  providers,
+  decisionProvider,
+  decisionTimeoutMs,
+  disabled,
+  onChange,
+}: {
+  idPrefix: string;
+  providers: ProviderOption[];
+  decisionProvider: string | null;
+  decisionTimeoutMs: number | null;
+  disabled?: boolean;
+  onChange: (patch: { decisionProvider?: string | null; decisionTimeoutMs?: number | null }) => void;
+}) {
+  const t = useT();
+  const options = jevDecisionServiceOptions(providers, decisionProvider);
+  const selected = options.find(option => option.id === decisionProvider) ?? options[0]!;
+  return (
+    <>
+      <div className="cwi-field">
+        <label htmlFor={`${idPrefix}-decision-provider`}>{t("cws.jev.decisionService")}</label>
+        <select
+          id={`${idPrefix}-decision-provider`}
+          className="input"
+          value={selected.id ?? ""}
+          disabled={disabled}
+          onChange={(e) => onChange({ decisionProvider: e.target.value || null })}
+        >
+          {options.map(option => (
+            <option key={option.id ?? ""} value={option.id ?? ""}>
+              {option.id === null
+                ? t("cws.jev.decisionServiceDefault")
+                : option.missing
+                  ? `${option.id} (${t("cws.jev.decisionServiceMissing")})`
+                  : option.id}
+            </option>
+          ))}
+        </select>
+        <p className="muted" style={{ fontSize: 12, margin: "8px 0 0", overflowWrap: "anywhere" }}>
+          {selected.id === null ? t("cws.jev.decisionServiceDefaultHint") : t("cws.jev.decisionServiceHint")}
+          {selected.baseUrl && <> <code>{selected.baseUrl}</code></>}
+        </p>
+      </div>
+      <div className="cwi-field">
+        <label htmlFor={`${idPrefix}-decision-timeout`}>{t("cws.jev.decisionTimeout")}</label>
+        <input
+          id={`${idPrefix}-decision-timeout`}
+          className="input mono"
+          type="number"
+          inputMode="numeric"
+          min={JEV_DECISION_TIMEOUT_MIN_MS}
+          max={JEV_DECISION_TIMEOUT_MAX_MS}
+          step={1}
+          placeholder={String(JEV_DECISION_TIMEOUT_DEFAULT_MS)}
+          value={decisionTimeoutMs ?? ""}
+          disabled={disabled}
+          onChange={(e) => {
+            if (e.target.value === "") {
+              onChange({ decisionTimeoutMs: null });
+              return;
+            }
+            const value = Number(e.target.value);
+            if (Number.isFinite(value)) onChange({ decisionTimeoutMs: value });
+          }}
+        />
+        <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
+          {t("cws.jev.decisionTimeoutHint", {
+            default: JEV_DECISION_TIMEOUT_DEFAULT_MS,
+            min: JEV_DECISION_TIMEOUT_MIN_MS,
+            max: JEV_DECISION_TIMEOUT_MAX_MS,
+          })}
+        </p>
+      </div>
+    </>
   );
 }
 

@@ -219,6 +219,8 @@ effort pairs at 24 or fewer (fewer than 2 or more than 26 fail open without a re
 its effective context is about 2k tokens and OpenCodex clips the task text to 500 characters. Keep the
 model resident (`OLLAMA_KEEP_ALIVE=-1`) and raise `decisionTimeoutMs` for slow services; see
 [Self-hosted decision model](/guides/combos/#self-hosted-decision-model-eg-ollama-tev1).
+In the dashboard, set both from the JEV Combo's **Decision service** and **Decision timeout (ms)**
+fields under **Models → Combos**.
 
 ## Routing policy profiles (`config.routingProfiles`)
 

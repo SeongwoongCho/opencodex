@@ -15,8 +15,8 @@ import { Notice } from "../ui";
 import { useT } from "../i18n/shared";
 import { useDataSurface } from "../data-surface";
 import { DataSurfaceSkeleton } from "../components/data-surface";
-import { normalizeHashPath, replaceHash } from "../hash-routing";
-import { JEV_AUTO_CREATE_HASH } from "../app-routing";
+import { replaceHash } from "../hash-routing";
+import { jevAutoCreateDecisionProvider } from "../app-routing";
 import type { ComboAddIntent } from "../components/combo-workspace-types";
 
 type ProviderOption = {
@@ -98,12 +98,17 @@ export default function Combos({
   const [status, setStatus] = useState("");
   const [statusOk, setStatusOk] = useState(false);
   const [addIntent, setAddIntent] = useState<ComboAddIntent | null>(() => (
-    normalizeHashPath(window.location.hash) === JEV_AUTO_CREATE_HASH ? "jev-auto" : null
+    jevAutoCreateDecisionProvider(window.location.hash) !== undefined ? "jev-auto" : null
   ));
+  // A self-hosted decision row's "Create JEV Auto" pre-fills that row as the decision service.
+  const [addDecisionProvider, setAddDecisionProvider] = useState<string | null>(
+    () => jevAutoCreateDecisionProvider(window.location.hash) ?? null,
+  );
 
   const closeAdd = useCallback(() => {
     setAddIntent(null);
-    if (normalizeHashPath(window.location.hash) === JEV_AUTO_CREATE_HASH) {
+    setAddDecisionProvider(null);
+    if (jevAutoCreateDecisionProvider(window.location.hash) !== undefined) {
       replaceHash("models/combos");
     }
   }, []);
@@ -395,6 +400,7 @@ export default function Combos({
           onAdd={(intent = "blank") => setAddIntent(intent)}
           adding={addIntent !== null}
           addIntent={addIntent ?? undefined}
+          addDecisionProvider={addDecisionProvider}
           onCloseAdd={closeAdd}
           onCreated={() => resource.refresh()}
         />

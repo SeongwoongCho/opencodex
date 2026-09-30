@@ -74,6 +74,30 @@ export const MODELS_TAB_HASHES = ["models/combos", "models/routing", "models/com
 /** Action deep link that opens the editable JEV Auto template in the Combos tab. */
 export const JEV_AUTO_CREATE_HASH = "models/combos/jev-auto";
 
+/** JEV Auto deep link; a self-hosted `jev-decision` row rides along as `?decisionProvider=`. */
+export function jevAutoCreateHash(decisionProvider?: string | null): string {
+  const id = decisionProvider?.trim();
+  return id && id !== "jev"
+    ? `${JEV_AUTO_CREATE_HASH}?${new URLSearchParams({ decisionProvider: id })}`
+    : JEV_AUTO_CREATE_HASH;
+}
+
+/**
+ * Whether a provider row offers "Create JEV Auto". The canonical `jev` row needs its TypeSafe
+ * key; a self-hosted `jev-decision` row may be keyless (e.g. a loopback Ollama endpoint).
+ */
+export function canCreateJevAutoFrom(row: { name: string; adapter?: string; hasApiKey?: boolean }): boolean {
+  return row.adapter === "jev-decision" && (row.name !== "jev" || row.hasApiKey === true);
+}
+
+/** The decision provider a JEV Auto deep link pre-fills, or undefined when it is not one. */
+export function jevAutoCreateDecisionProvider(hash: string): string | null | undefined {
+  const { path, query } = splitHashQuery(normalizeHashPath(hash));
+  if (path !== JEV_AUTO_CREATE_HASH) return undefined;
+  const id = new URLSearchParams(query).get("decisionProvider")?.trim();
+  return id && id !== "jev" ? id : null;
+}
+
 /**
  * `#dashboard/update` is an action deep link, not a tab: the sidebar update button uses
  * it to open the maintenance update dialog over the Overview section. It is listed as a
@@ -115,10 +139,12 @@ export const INTEGRATION_TAB_HASHES = [
 
 /**
  * Routes that own a `?query` suffix: provider settings for one provider
- * (`#providers?provider=<name>`) and a protocol-pair prefilter on the compatibility matrix
- * (`#models/compatibility?inbound=chat&upstream=messages`). Anywhere else the query is dropped.
+ * (`#providers?provider=<name>`), a protocol-pair prefilter on the compatibility matrix
+ * (`#models/compatibility?inbound=chat&upstream=messages`), and the decision service a JEV Auto
+ * deep link pre-fills (`#models/combos/jev-auto?decisionProvider=<name>`). Anywhere else the
+ * query is dropped.
  */
-export const QUERY_HASH_PATHS: readonly string[] = ["providers", "models/compatibility"];
+export const QUERY_HASH_PATHS: readonly string[] = ["providers", "models/compatibility", JEV_AUTO_CREATE_HASH];
 
 export function hashBelongsToPage(rawHash: string, page: Page): boolean {
   return rawHash === page

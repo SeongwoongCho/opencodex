@@ -126,6 +126,8 @@ describe("combo-workspace-data", () => {
         imageInput: "auto",
         reasoningEffortMode: "adaptive",
         alias: "jev-auto",
+        decisionProvider: null,
+        decisionTimeoutMs: null,
       },
     });
   });

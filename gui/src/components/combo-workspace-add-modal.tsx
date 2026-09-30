@@ -7,12 +7,13 @@ import {
   emptyDraft,
   intersectComboEfforts,
   validateComboDraft,
+  withComboStrategy,
 } from "../combo-workspace-data";
 import { IconX } from "../icons";
 import { useT } from "../i18n/shared";
 import { Notice } from "../ui";
 import type { ModelOption, ProviderOption } from "./combo-workspace-types";
-import { ComboCapabilities, EffortSelect, StrategySeg, TargetEditor } from "./combo-workspace-controls";
+import { ComboCapabilities, EffortSelect, JevDecisionFields, StrategySeg, TargetEditor } from "./combo-workspace-controls";
 import { COMBO_STRATEGY_HINT_KEYS, COMBO_TARGETS_HINT_KEYS } from "../combo-workspace-data";
 import { clampedNumberInput } from "./combo-workspace-utils";
 
@@ -174,12 +175,22 @@ export function AddComboModal({
             <StrategySeg
               value={draft.strategy}
               disabled={busy}
-              onChange={(strategy) => setDraft((d) => ({ ...d, strategy }))}
+              onChange={(strategy) => setDraft((d) => withComboStrategy(d, strategy))}
             />
             <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
               {t(COMBO_STRATEGY_HINT_KEYS[draft.strategy])}
             </p>
           </div>
+          {draft.strategy === "jev" && (
+            <JevDecisionFields
+              idPrefix="cwi-new"
+              providers={providers}
+              decisionProvider={draft.decisionProvider ?? null}
+              decisionTimeoutMs={draft.decisionTimeoutMs ?? null}
+              disabled={busy}
+              onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+            />
+          )}
           <div className="cwi-field">
             <label htmlFor="cwi-new-effort">{t("cws.field.defaultEffort")}</label>
             <EffortSelect

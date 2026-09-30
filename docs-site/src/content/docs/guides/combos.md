@@ -335,8 +335,9 @@ Combo's `decisionProvider`:
 
 The provider's **Test connection** sends the same bounded probe decision to the self-hosted endpoint.
 From the CLI, use `ocx combo set <id> --strategy jev --decision-provider ollama-tev1
---decision-timeout 60000 --targets ...`. The dashboard has no decision-service control yet; a
-dashboard save of an existing JEV Combo keeps its `decisionProvider` and `decisionTimeoutMs`.
+--decision-timeout 60000 --targets ...`. In the dashboard, a JEV Combo's editor has **Decision
+service** and **Decision timeout (ms)** fields; **Create JEV Auto** on a self-hosted decision provider
+(keyless rows included) prefills it as the decision service.
 
 For each JEV target, **Models → Combos → Config** has an optional **Additional model notes for JEV**
 field (up to 512 characters; line breaks and tabs are allowed, other control characters are rejected). It is stored as `targets[].modelProfile` in the combo config. The
@@ -595,7 +596,9 @@ task workflow.
 Open the local dashboard and choose **Models → Combos**. The workspace creates, edits, renames, and removes
 combos, and its target picker excludes disabled models, nested combos, and the credential-only JEV
 provider. **Create JEV Auto** opens the same Combo editor with an editable decision target template;
-an existing `jev-auto` id or alias is reported instead of creating a duplicate.
+an existing `jev-auto` id or alias is reported instead of creating a duplicate. A JEV Combo also shows
+**Decision service** (TypeSafe JEV or a configured `jev-decision` provider) and **Decision timeout
+(ms)**, and the Combos overview lists each JEV Combo's decision service, endpoint, and timeout.
 
 Each target also shows a live quota badge: **Available**, **Out of quota**, or **Quota unknown**. The editor blocks Save and Create for quota only when every usable target has a current server-confirmed exhausted inference limit for its configured credential. Display-only account, model, search and MCP quota, or missing or expired routing evidence, does not cause this block. The block expires at the applicable reset or freshness boundary and is rechecked when the page becomes active or visible; Refresh reloads both Combo data and quota. The dashboard
 editor does not yet expose `cooldownMs` or `waitForCooldownMs`; use the configuration file or management
@@ -633,8 +636,9 @@ serializer omits that default. Omission preserves both values and the dashboard 
 Omitting `defaultEffortMode`, `reasoningEffortMode`, `imageInput`, or `cooldownWaitPolicy` likewise
 keeps the stored value, as does omitting `decisionProvider` or `decisionTimeoutMs` while the request
 keeps `strategy: "jev"` (a different strategy drops them), and a re-sent target without `lastResort` keeps that target's flag (matched by
-provider and model). The dashboard always sends `imageInput` and `reasoningEffortMode`, so switching
-them back to `auto` or `strict` there still replaces the stored value.
+provider and model). The dashboard always sends `imageInput` and `reasoningEffortMode`, and for a JEV
+Combo `decisionProvider` and `decisionTimeoutMs` (`null` for the default), so switching them back to
+the default there still replaces the stored value.
 
 For the complete persisted configuration, see [Configuration](/reference/configuration/).
 

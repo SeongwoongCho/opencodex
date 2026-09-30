@@ -221,8 +221,9 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
       ...(!Object.hasOwn(requestedCombo, "defaultEffortMode") && previous?.defaultEffortMode !== undefined
         ? { defaultEffortMode: previous.defaultEffortMode }
         : {}),
-      // The dashboard has no decision-service control either, so a round-trip of a JEV combo
-      // keeps it. Switching to another strategy drops it rather than failing validation.
+      // An API or CLI round-trip of a JEV combo that omits these keeps them; the dashboard sends
+      // both explicitly (null = default). Switching to another strategy drops them rather than
+      // failing validation.
       ...(!Object.hasOwn(requestedCombo, "decisionProvider")
         && previous?.decisionProvider !== undefined
         && requestedCombo.strategy === "jev"

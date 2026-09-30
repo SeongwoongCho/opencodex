@@ -31,6 +31,7 @@ export default function ComboWorkspace({
   onAdd,
   adding,
   addIntent,
+  addDecisionProvider,
   onCloseAdd,
   onCreated,
 }: ComboWorkspaceProps) {
@@ -58,8 +59,10 @@ export default function ComboWorkspace({
     [providers],
   );
   const addDraft = useMemo(
-    () => addIntent === "jev-auto" ? jevAutoDraft(models, jevTargetProviders) : undefined,
-    [addIntent, jevTargetProviders, models],
+    () => addIntent === "jev-auto"
+      ? jevAutoDraft(models, jevTargetProviders, addDecisionProvider)
+      : undefined,
+    [addDecisionProvider, addIntent, jevTargetProviders, models],
   );
 
   const filtered = useMemo(() => filterCombos(combos, query), [combos, query]);
@@ -255,6 +258,7 @@ export default function ComboWorkspace({
             cataloguedComboIds={cataloguedComboIds}
             providerMap={providerMap}
             providerQuotaStates={providerQuotaStates}
+            providers={providers}
             onSelect={(id) => trySelect(id)}
             onAdd={onAdd}
           />
@@ -263,7 +267,7 @@ export default function ComboWorkspace({
 
       {adding && (
         <AddComboModal
-          key={addIntent ?? "blank"}
+          key={`${addIntent ?? "blank"}:${addDecisionProvider ?? ""}`}
           existingIds={combos.map((c) => c.id)}
           existingAliases={existingComboAliases}
           providerMap={providerMap}
