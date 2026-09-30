@@ -627,6 +627,7 @@
   "combo-stream-preflight.test.ts": "routing",
   "combo-workspace-data.test.ts": "gui",
   "combo-workspace-jev-decision.test.ts": "gui",
+  "combo-workspace-jev-level.test.ts": "gui",
   "combos.test.ts": "codex-integration",
   "command-code-error-finish.test.ts": "providers",
   "command-code-efforts.test.ts": "providers",

@@ -14,8 +14,10 @@ import {
   type JevDecisionRow,
   jevDecisionRowIssue,
 } from "./jev-decision-service";
+import { JEV_DEFAULT_FALLBACK_LEVEL, JEV_LEVEL_IDS, type JevLevelId } from "../../src/combos/jev-decision-contract";
 
 export { SUPPORTED_NATIVE_OPENAI_SLUGS };
+export type { JevLevelId };
 
 export type ComboStrategy = "failover" | "round-robin" | "random" | "least-used" | "reset-window" | "jev";
 export type ComboEffort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
@@ -169,7 +171,46 @@ export interface ComboItem {
   decisionTimeoutMs?: number | null;
   /** `jev` only: send each target's remaining-quota tier with the decision; omitted = off. */
   decisionQuotaSignals?: boolean;
+  /** `jev` only: level mode; omitted = route mode. */
+  decisionMode?: "level";
+  /** `jev` only: per-level candidate lists; read-only in the dashboard, never sent back. */
+  decisionLevels?: ComboDecisionLevels;
+  /** `jev` only: explicit level-mode fallback level; read-only, never sent back. */
+  decisionFallbackLevel?: JevLevelId;
   targets: ComboTarget[];
+}
+
+export interface ComboDecisionLevelCandidate {
+  provider: string;
+  model: string;
+  effort?: ComboEffort;
+}
+
+/** Configured levels in canonical order; a level with an override keeps its description. */
+export type ComboDecisionLevels = Array<{ id: JevLevelId; description?: string; candidates: ComboDecisionLevelCandidate[] }>;
+
+/** Read-only projection of stored `decisionLevels`; malformed entries are skipped, not repaired. */
+function normalizeDecisionLevels(raw: unknown): ComboDecisionLevels | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const levels: ComboDecisionLevels = [];
+  for (const id of JEV_LEVEL_IDS) {
+    const level = (raw as Record<string, unknown>)[id];
+    if (!level || typeof level !== "object" || !Array.isArray((level as { candidates?: unknown }).candidates)) continue;
+    const candidates: ComboDecisionLevelCandidate[] = [];
+    for (const entry of (level as { candidates: unknown[] }).candidates) {
+      if (!entry || typeof entry !== "object") continue;
+      const { provider, model, effort } = entry as Record<string, unknown>;
+      if (typeof provider !== "string" || typeof model !== "string") continue;
+      candidates.push({
+        provider,
+        model,
+        ...(typeof effort === "string" && (COMBO_EFFORTS as string[]).includes(effort) ? { effort: effort as ComboEffort } : {}),
+      });
+    }
+    const description = (level as { description?: unknown }).description;
+    levels.push({ id, ...(typeof description === "string" && description.trim() ? { description } : {}), candidates });
+  }
+  return levels.length > 0 ? levels : undefined;
 }
 
 export interface ComboSections {
@@ -297,6 +338,7 @@ export function parseComboList(payload: unknown): ComboItem[] {
     }
     const decisionProvider = normalizeDecisionProvider(r.decisionProvider);
     const decisionTimeoutMs = normalizeDecisionTimeoutMs(r.decisionTimeoutMs);
+    const decisionLevels = normalizeDecisionLevels(r.decisionLevels);
     out.push({
       id,
       model: typeof r.model === "string" && r.model.trim()
@@ -314,6 +356,11 @@ export function parseComboList(payload: unknown): ComboItem[] {
       ...(decisionProvider !== null ? { decisionProvider } : {}),
       ...(decisionTimeoutMs !== null ? { decisionTimeoutMs } : {}),
       ...(r.decisionQuotaSignals === true ? { decisionQuotaSignals: true } : {}),
+      ...(r.decisionMode === "level" ? { decisionMode: "level" as const } : {}),
+      ...(decisionLevels ? { decisionLevels } : {}),
+      ...(typeof r.decisionFallbackLevel === "string" && (JEV_LEVEL_IDS as readonly string[]).includes(r.decisionFallbackLevel)
+        ? { decisionFallbackLevel: r.decisionFallbackLevel as JevLevelId }
+        : {}),
       targets,
     });
   }
@@ -488,6 +535,7 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
       (a.decisionProvider ?? null) !== (b.decisionProvider ?? null)
       || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
       || (a.decisionQuotaSignals === true) !== (b.decisionQuotaSignals === true)
+      || (a.decisionMode ?? "route") !== (b.decisionMode ?? "route")
     ))
   ) return false;
   if (a.targets.length !== b.targets.length) return false;
@@ -517,6 +565,7 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
     decisionProvider?: string | null;
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
+    decisionMode?: "level" | null;
   };
 } {
   const weighted = item.strategy === "round-robin" || item.strategy === "random";
@@ -554,6 +603,9 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
             decisionTimeoutMs: item.decisionTimeoutMs ?? null,
             // Explicit false turns it off; the server keeps an omitted value.
             decisionQuotaSignals: item.decisionQuotaSignals === true,
+            // Null selects route mode. Levels and the fallback level are never sent: the server
+            // keeps the stored ones, which the dashboard shows but does not edit.
+            decisionMode: item.decisionMode === "level" ? "level" : null,
           }
         : {}),
     },
@@ -771,9 +823,9 @@ export function jevDecisionServiceOptions(
 
 /** Read-only decision-service facts for a JEV combo, or null for other strategies. */
 export function jevDecisionSummary(
-  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionTimeoutMs" | "decisionQuotaSignals">,
+  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionTimeoutMs" | "decisionQuotaSignals" | "decisionMode">,
   providers: readonly { name: string; adapter?: string; baseUrl?: string }[],
-): { provider: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean } | null {
+): { provider: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean; mode: "route" | "level" } | null {
   if (item.strategy !== "jev") return null;
   const provider = normalizeDecisionProvider(item.decisionProvider);
   const row = provider === null ? undefined : providers.find(candidate => candidate.name === provider);
@@ -782,5 +834,16 @@ export function jevDecisionSummary(
     baseUrl: row?.baseUrl?.trim() || null,
     timeoutMs: item.decisionTimeoutMs ?? null,
     quotaSignals: item.decisionQuotaSignals === true,
+    mode: item.decisionMode === "level" ? "level" : "route",
   };
+}
+
+/** Level-mode fallback level as the server applies it: the stored one, else the default. */
+export function jevEffectiveFallbackLevel(item: Pick<ComboItem, "decisionFallbackLevel">): JevLevelId {
+  return item.decisionFallbackLevel ?? JEV_DEFAULT_FALLBACK_LEVEL;
+}
+
+/** One display line per level candidate: `provider/model:effort`, or without effort when unset. */
+export function jevLevelCandidateLabel(candidate: ComboDecisionLevelCandidate): string {
+  return `${candidate.provider}/${candidate.model}${candidate.effort ? `:${candidate.effort}` : ""}`;
 }

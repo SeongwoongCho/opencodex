@@ -166,11 +166,11 @@ describe("JEV decision service in the combo workspace", () => {
   test("the read-only summary names the service, its endpoint and timeout", () => {
     expect(jevDecisionSummary(parseOne({ strategy: "failover" }), providers)).toBeNull();
     expect(jevDecisionSummary(parseOne({ strategy: "jev" }), providers))
-      .toEqual({ provider: null, baseUrl: null, timeoutMs: null, quotaSignals: false });
+      .toEqual({ provider: null, baseUrl: null, timeoutMs: null, quotaSignals: false, mode: "route" });
     expect(jevDecisionSummary(
       parseOne({ strategy: "jev", decisionProvider: "mytev", decisionTimeoutMs: 30000 }),
       providers,
-    )).toEqual({ provider: "mytev", baseUrl: "https://local.example/v1/systemone", timeoutMs: 30000, quotaSignals: false });
+    )).toEqual({ provider: "mytev", baseUrl: "https://local.example/v1/systemone", timeoutMs: 30000, quotaSignals: false, mode: "route" });
   });
 
   test("JEV Auto pre-fills a self-hosted decision service and keeps TypeSafe by default", () => {
@@ -232,6 +232,6 @@ describe("JEV quota signals in the combo workspace", () => {
 
   test("the overview summary reports a quota-aware JEV combo", () => {
     expect(jevDecisionSummary(parseOne({ strategy: "jev", decisionQuotaSignals: true }), providers))
-      .toEqual({ provider: null, baseUrl: null, timeoutMs: null, quotaSignals: true });
+      .toEqual({ provider: null, baseUrl: null, timeoutMs: null, quotaSignals: true, mode: "route" });
   });
 });

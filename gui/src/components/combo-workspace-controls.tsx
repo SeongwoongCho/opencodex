@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ComboEffort, ComboStrategy, ComboTarget, ProviderQuotaStates } from "../combo-workspace-data";
+import type { ComboDecisionLevels, ComboEffort, ComboStrategy, ComboTarget, JevLevelId, ProviderQuotaStates } from "../combo-workspace-data";
 import { comboImagesSupported } from "../combo-capabilities";
 import {
   COMBO_EFFORTS,
@@ -19,6 +19,7 @@ import { useT } from "../i18n/shared";
 import { Switch } from "../ui";
 import { formatProviderDisplayName } from "../provider-icons";
 import type { ModelOption, ProviderOption } from "./combo-workspace-types";
+import { JevDecisionModeField } from "./combo-workspace-jev-levels";
 import { clampedNumberInput, enabledProviders, modelsForProvider } from "./combo-workspace-utils";
 
 export function StrategySeg({
@@ -160,6 +161,9 @@ export function JevDecisionFields({
   decisionProvider,
   decisionTimeoutMs,
   decisionQuotaSignals,
+  decisionMode,
+  decisionLevels,
+  decisionFallbackLevel,
   disabled,
   onChange,
 }: {
@@ -168,11 +172,15 @@ export function JevDecisionFields({
   decisionProvider: string | null;
   decisionTimeoutMs: number | null;
   decisionQuotaSignals: boolean;
+  decisionMode?: "level";
+  decisionLevels?: ComboDecisionLevels;
+  decisionFallbackLevel?: JevLevelId;
   disabled?: boolean;
   onChange: (patch: {
     decisionProvider?: string | null;
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
+    decisionMode?: "level";
   }) => void;
 }) {
   const t = useT();
@@ -265,9 +273,17 @@ export function JevDecisionFields({
           {t("cws.jev.quotaSignals")}
         </label>
         <p id={`${idPrefix}-decision-quota-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
-          {t("cws.jev.quotaSignalsHint")}
+          {t(decisionMode === "level" ? "cws.jev.quotaSignalsLevelHint" : "cws.jev.quotaSignalsHint")}
         </p>
       </div>
+      <JevDecisionModeField
+        idPrefix={idPrefix}
+        decisionMode={decisionMode}
+        decisionLevels={decisionLevels}
+        decisionFallbackLevel={decisionFallbackLevel}
+        disabled={disabled}
+        onChange={(mode) => onChange({ decisionMode: mode })}
+      />
     </>
   );
 }
