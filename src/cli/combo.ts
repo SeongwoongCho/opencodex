@@ -175,8 +175,10 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
     }
   }
   rejectArgs(args, USAGE);
+  // GET reports unset optional fields as null; PUT treats null as an explicit clear and rejects it
+  // for fields like alias, so a partial update resends only the fields that are actually set.
   const combo: Record<string, unknown> = partialExisting
-    ? { ...partialExisting }
+    ? Object.fromEntries(Object.entries(partialExisting).filter(([, value]) => value !== null))
     : { strategy, stickyLimit: stickyLimit ?? 1, targets: parseTargets(targetsRaw!) };
   delete combo.id;
   delete combo.model;

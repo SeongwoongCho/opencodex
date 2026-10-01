@@ -119,6 +119,20 @@ describe("partial combo updates", () => {
     expect(puts[0]).not.toHaveProperty("id");
     expect(puts[1]).toMatchObject({ targets, defaultEffort: null, defaultEffortMode: "force", decisionPrompt: null, decisionMode: null, alias: "" });
   });
+  test("drops null fields the GET listing reports for unset options", async () => {
+    // Real /api/combos rows carry alias/displayName/defaultEffort/decision* as null when unset; PUT rejects a null alias.
+    const targets = [{ provider: "a", model: "m", reasoningEfforts: ["low", "xhigh"], weight: 1, lastResort: false }];
+    const runtime = fakeRuntime([{ id: "row", model: "combo/row", strategy: "jev", stickyLimit: 1, targets, alias: null, displayName: null, defaultEffort: null, decisionProvider: "tev", decisionPrompt: null, decisionMode: "level", decisionLevels: levels }]);
+    const log = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await handleComboCommand(["set", "row", "--decision-prompt", JSON.stringify({ levelInstructions: "Custom" }), "--json"], runtime.deps)).toBe(0);
+    } finally { log.mockRestore(); }
+    const put = runtime.requests.find(row => row.method === "PUT")!.body as { combo: Record<string, unknown> };
+    expect(Object.values(put.combo)).not.toContain(null);
+    expect(put.combo).toMatchObject({ targets, decisionProvider: "tev", decisionMode: "level", decisionLevels: levels, decisionPrompt: { levelInstructions: "Custom" } });
+    expect(put.combo).not.toHaveProperty("alias");
+    expect(put.combo).not.toHaveProperty("model");
+  });
   test("create without targets gives a clear error and never writes", async () => {
     const runtime = fakeRuntime();
     const error = spyOn(console, "error").mockImplementation(() => {});
