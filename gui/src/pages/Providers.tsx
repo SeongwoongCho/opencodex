@@ -27,6 +27,7 @@ import { jevAutoCreateHash } from "../app-routing";
 import { canCreateJevAutoFrom } from "../jev-decision-service";
 import { useProviderSettingsDeepLink } from "./providers-deep-link";
 import { subscribeKiroDeviceFinal } from "../kiro-device-login-finalizer";
+import type { BrowserLaunch } from "../oauth-browser-launch";
 
 /** The page's real refresh tickets: only the captured report epoch and account read can settle them. */
 // oxlint-disable-next-line react/only-export-components -- keep the page-owned coordinator and its direct race tests in the authorized owner.
@@ -226,7 +227,7 @@ export default function Providers({ apiBase }: { apiBase: string }) {
   const [oauthProviders, setOauthProviders] = useState<string[]>([]);
   const [oauthStatus, setOauthStatus] = useState<Record<string, import("./providers-shared").OAuthStatus>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const [loginInfo, setLoginInfo] = useState<{ provider: string; url?: string; instructions?: string; deviceCode?: string } | null>(null);
+  const [loginInfo, setLoginInfo] = useState<{ provider: string; url?: string; instructions?: string; deviceCode?: string; browserLaunch?: BrowserLaunch } | null>(null);
   const [workspaceSelected, setWorkspaceSelected] = useState<string | null>(null);
   const [addIntent, setAddIntent] = useState<AddProviderIntent | null>(null);
   const [removeConfirmName, setRemoveConfirmName] = useState<string | null>(null);
