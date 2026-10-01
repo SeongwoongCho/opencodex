@@ -1,3 +1,5 @@
+import { normalizeJevPromptFields } from "../../src/combos/jev-decision-contract";
+import type { JevDecisionPrompt } from "../../src/combos/jev-decision-contract";
 /**
  * Pure view-model helpers for the Combos workspace.
  * No network — transforms GET /api/combos rows into rail groups + attention.
@@ -173,7 +175,10 @@ export interface ComboItem {
   decisionQuotaSignals?: boolean;
   /** `jev` only: level mode; omitted = route mode. */
   decisionMode?: "level";
-  /** `jev` only: per-level candidate lists; read-only in the dashboard, never sent back. */
+  decisionPrompt?: JevDecisionPrompt;
+  /** Draft-only: description edits preserve the stored candidate lists. */
+  decisionLevelsEdited?: true;
+  /** `jev` only: per-level candidate lists; only descriptions are editable in the dashboard. */
   decisionLevels?: ComboDecisionLevels;
   /** `jev` only: explicit level-mode fallback level; read-only, never sent back. */
   decisionFallbackLevel?: JevLevelId;
@@ -360,6 +365,7 @@ export function parseComboList(payload: unknown): ComboItem[] {
       ...(r.decisionQuotaSignals === true ? { decisionQuotaSignals: true } : {}),
       ...(r.decisionMode === "level" ? { decisionMode: "level" as const } : {}),
       ...(decisionLevels ? { decisionLevels } : {}),
+      ...normalizeJevPromptFields(r),
       ...(typeof r.decisionFallbackLevel === "string" && (JEV_LEVEL_IDS as readonly string[]).includes(r.decisionFallbackLevel)
         ? { decisionFallbackLevel: r.decisionFallbackLevel as JevLevelId }
         : {}),
@@ -538,6 +544,8 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
       || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
       || (a.decisionQuotaSignals === true) !== (b.decisionQuotaSignals === true)
       || (a.decisionMode ?? "route") !== (b.decisionMode ?? "route")
+      || JSON.stringify(normalizeJevPromptFields(a)) !== JSON.stringify(normalizeJevPromptFields(b))
+      || JSON.stringify(a.decisionLevels ?? []) !== JSON.stringify(b.decisionLevels ?? [])
       || (a.clearDecisionLevels === true) !== (b.clearDecisionLevels === true)
     ))
   ) return false;
@@ -569,7 +577,8 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
     decisionMode?: "level" | null;
-    decisionLevels?: null;
+    decisionPrompt?: JevDecisionPrompt | null;
+    decisionLevels?: Partial<Record<JevLevelId, { description?: string; candidates: ComboDecisionLevelCandidate[] }>> | null;
     decisionFallbackLevel?: null;
   };
 } {
@@ -608,9 +617,12 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
             decisionTimeoutMs: item.decisionTimeoutMs ?? null,
             // Explicit false turns it off; the server keeps an omitted value.
             decisionQuotaSignals: item.decisionQuotaSignals === true,
-            // Null selects route mode. Levels and the fallback level are never sent: the server
-            // keeps the stored ones, which the dashboard shows but does not edit.
+            // Null selects route mode. Unedited levels and fallback survive by omission.
             decisionMode: item.decisionMode === "level" ? "level" : null,
+            decisionPrompt: normalizeJevPromptFields(item).decisionPrompt ?? null,
+            ...(item.decisionLevelsEdited && item.decisionLevels
+              ? { decisionLevels: Object.fromEntries(item.decisionLevels.map(({ id, description, candidates }) => [id, { candidates, ...(description?.trim() ? { description: description.trim() } : {}) }])) }
+              : {}),
             // The one level edit the dashboard makes: an explicit clear, offered only in route mode.
             ...(item.clearDecisionLevels && item.decisionMode !== "level"
               ? { decisionLevels: null, decisionFallbackLevel: null }

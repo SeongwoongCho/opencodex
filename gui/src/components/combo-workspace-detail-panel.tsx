@@ -96,7 +96,7 @@ export function DetailPanel({
   const dirty = !draftEquals(draft, baseline);
   const staleLevelCandidates = useMemo(() => jevStaleLevelCandidates(draft), [draft]);
   const allTargetsExhausted = comboQuotaState(draft.targets, providerQuotaStates, providerMap) === "exhausted";
-  const baselineSyncKey = JSON.stringify([baseline.id, baseline.alias, baseline.nativeAlias, baseline.displayName, baseline.strategy, baseline.stickyLimit, baseline.defaultEffort, baseline.imageInput, baseline.reasoningEffortMode, baseline.decisionProvider, baseline.decisionTimeoutMs, baseline.decisionQuotaSignals, baseline.decisionMode, baseline.decisionLevels, baseline.decisionFallbackLevel, baseline.clearDecisionLevels, baseline.targets.map(t => [t.provider, t.model, t.weight, t.reasoningEfforts, t.modelProfile])]);
+  const baselineSyncKey = JSON.stringify([baseline.id, baseline.alias, baseline.nativeAlias, baseline.displayName, baseline.strategy, baseline.stickyLimit, baseline.defaultEffort, baseline.imageInput, baseline.reasoningEffortMode, baseline.decisionProvider, baseline.decisionTimeoutMs, baseline.decisionQuotaSignals, baseline.decisionMode, baseline.decisionPrompt, baseline.decisionLevels, baseline.decisionFallbackLevel, baseline.clearDecisionLevels, baseline.targets.map(t => [t.provider, t.model, t.weight, t.reasoningEfforts, t.modelProfile])]);
   const effortMap = useMemo(() => {
     const map = new Map<string, string[] | undefined>();
     for (const model of models) {
@@ -161,7 +161,7 @@ export function DetailPanel({
       // The server keeps these only for JEV, so the saved baseline must not carry stale ones.
       ...(draft.strategy === "jev"
         ? {}
-        : { decisionProvider: null, decisionTimeoutMs: null, decisionQuotaSignals: false, decisionMode: undefined, decisionLevels: undefined, decisionFallbackLevel: undefined }),
+        : { decisionProvider: null, decisionTimeoutMs: null, decisionQuotaSignals: false, decisionMode: undefined, decisionPrompt: undefined, decisionLevels: undefined, decisionFallbackLevel: undefined }),
     };
     const renameFrom = !isCreate && trimmedId !== baseline.id ? baseline.id : undefined;
     try {
@@ -353,6 +353,7 @@ export function DetailPanel({
                 decisionTimeoutMs={draft.decisionTimeoutMs ?? null}
                 decisionQuotaSignals={draft.decisionQuotaSignals === true}
                 decisionMode={draft.decisionMode}
+                decisionPrompt={draft.decisionPrompt}
                 decisionLevels={draft.decisionLevels}
                 decisionFallbackLevel={draft.decisionFallbackLevel}
                 comboId={baseline.id}

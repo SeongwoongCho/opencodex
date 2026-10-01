@@ -76,3 +76,30 @@ describe("ocx combo set level mode", () => {
     }
   });
 });
+
+describe("ocx combo set decision prompt", () => {
+  test("sets, omits and clears the JSON prompt", async () => {
+    const runtime = fakeRuntime();
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    const decisionPrompt = { levelInstructions: "Custom classification." };
+    try {
+      for (const flags of [["--decision-prompt", JSON.stringify(decisionPrompt)], [], ["--decision-prompt", "-"]]) {
+        expect(await handleComboCommand([...base, ...flags, "--json"], runtime.deps)).toBe(0);
+      }
+    } finally { logSpy.mockRestore(); }
+    const puts = runtime.requests.filter(row => row.method === "PUT").map(row => (row.body as { combo: Record<string, unknown> }).combo);
+    expect(puts[0]!.decisionPrompt).toEqual(decisionPrompt);
+    expect(puts[1]).not.toHaveProperty("decisionPrompt");
+    expect(puts[2]!.decisionPrompt).toBeNull();
+  });
+  test("rejects malformed JSON and non-JEV prompt usage without a request", async () => {
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      for (const flags of [["--strategy", "jev", "--decision-prompt", "{"], ["--strategy", "jev", "--decision-prompt", "[]"], ["--decision-prompt", "{}"]]) {
+        const runtime = fakeRuntime();
+        expect(await handleComboCommand(["set", "auto", "--targets", "a/m", ...flags], runtime.deps)).toBe(2);
+        expect(runtime.requests).toEqual([]);
+      }
+    } finally { errorSpy.mockRestore(); }
+  });
+});

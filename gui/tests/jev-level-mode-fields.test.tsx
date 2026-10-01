@@ -213,3 +213,65 @@ test("leaving the JEV strategy warns that stored levels will be discarded", asyn
   expect(warning.getAttribute("role")).toBe("alert");
   expect(warning.textContent).toContain("permanently removes");
 });
+
+function setTextarea(textarea: HTMLTextAreaElement, value: string) {
+  Object.getOwnPropertyDescriptor(testWindow.HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, value);
+  textarea.dispatchEvent(new testWindow.Event("input", { bubbles: true }));
+}
+
+test("level prompt and effective descriptions are editable and reset without changing candidates", async () => {
+  const saved: ComboItem[] = [];
+  const host = await renderWorkspace([levelCombo], saved);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!.click(); });
+  await flush();
+  const area = host.querySelector<HTMLDetailsElement>("[data-jev-decision-prompt]")!;
+  area.open = true;
+  expect(area.querySelector("summary")?.textContent).toBe("Decision prompt");
+  expect(area.textContent).toContain("Changing decision wording can change routing accuracy; re-evaluate after edits.");
+  const instruction = host.querySelector<HTMLTextAreaElement>("#cwi-edit-prompt-level")!;
+  const description = host.querySelector<HTMLTextAreaElement>("#cwi-edit-prompt-description-trivial")!;
+  const originalInstruction = instruction.value;
+  const originalDescription = description.value;
+  expect(originalInstruction).toContain("Classify how demanding");
+  expect(originalDescription).toContain("A quick lookup");
+  await act(async () => { setTextarea(instruction, "Custom level instruction."); });
+  await act(async () => { setTextarea(description, "Custom trivial description."); });
+  await act(async () => { host.querySelector<HTMLButtonElement>("#cwi-edit-save")!.click(); });
+  await flush();
+  expect(saved.at(-1)?.decisionPrompt?.levelInstructions).toBe("Custom level instruction.");
+  expect(saved.at(-1)?.decisionLevels?.[0]?.description).toBe("Custom trivial description.");
+  expect(saved.at(-1)?.decisionLevels?.map(entry => entry.candidates)).toEqual(levelCombo.decisionLevels!.map(entry => entry.candidates));
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-prompt-reset="level"]')!.click(); });
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-prompt-reset="description-trivial"]')!.click(); });
+  expect(instruction.value).toBe(originalInstruction);
+  expect(description.value).toBe(originalDescription);
+  await act(async () => { host.querySelector<HTMLButtonElement>("#cwi-edit-save")!.click(); });
+  await flush();
+  expect(saved.at(-1)?.decisionPrompt?.levelInstructions).toBeUndefined();
+  expect(saved.at(-1)?.decisionLevels?.[0]).not.toHaveProperty("description");
+  expect(saved.at(-1)?.decisionLevels?.[0]?.candidates).toEqual(levelCombo.decisionLevels![0]!.candidates);
+});
+
+test("route prompt shows defaults for all instructions and effort profiles, and supports edit and reset", async () => {
+  const saved: ComboItem[] = [];
+  const host = await renderWorkspace([{ ...levelCombo, decisionMode: undefined }], saved);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!.click(); });
+  await flush();
+  const area = host.querySelector<HTMLDetailsElement>("[data-jev-decision-prompt]")!;
+  area.open = true;
+  expect(area.querySelectorAll("textarea")).toHaveLength(11);
+  const question = host.querySelector<HTMLTextAreaElement>("#cwi-edit-prompt-question")!;
+  const original = question.value;
+  expect(original).toContain("Which target AND reasoning effort");
+  await act(async () => { setTextarea(question, "Custom route question."); });
+  await act(async () => { setTextarea(host.querySelector<HTMLTextAreaElement>("#cwi-edit-prompt-effort-low")!, "Custom low budget."); });
+  await act(async () => { host.querySelector<HTMLButtonElement>("#cwi-edit-save")!.click(); });
+  await flush();
+  expect(saved.at(-1)?.decisionPrompt?.route).toEqual({ question: "Custom route question.", effortProfiles: { low: "Custom low budget." } });
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-prompt-reset="question"]')!.click(); });
+  expect(question.value).toBe(original);
+  await act(async () => { host.querySelector<HTMLButtonElement>("#cwi-edit-save")!.click(); });
+  await flush();
+  expect(saved.at(-1)?.decisionPrompt?.route?.question).toBeUndefined();
+  expect(saved.at(-1)?.decisionPrompt?.route?.effortProfiles?.low).toBe("Custom low budget.");
+});

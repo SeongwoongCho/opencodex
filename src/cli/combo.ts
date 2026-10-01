@@ -21,7 +21,7 @@ const USAGE = `Usage:
       (force overrides valid client effort and can increase cost/latency) [--alias <name|->]
       [--native-alias] [--display-name <label|->]
       [--decision-provider <provider|->] [--decision-timeout <ms|->] [--decision-quota <on|off|->]
-      [--decision-mode <route|level|->] [--decision-levels <json|->] [--decision-fallback-level <level|->]
+      [--decision-mode <route|level|->] [--decision-levels <json|->] [--decision-prompt <json|->] [--decision-fallback-level <level|->]
       (jev only; the provider must be a configured jev-decision row)
       [--rename-from <id>] [--json]
   ocx combo remove <id> --yes [--json]`;
@@ -137,6 +137,16 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
       throw new CliUsageError("--decision-levels must be a JSON object, or -", USAGE);
     }
   }
+  const decisionPromptRaw = takeOption(args, "--decision-prompt");
+  let decisionPrompt: unknown;
+  if (decisionPromptRaw !== undefined && decisionPromptRaw !== "-") {
+    try { decisionPrompt = JSON.parse(decisionPromptRaw); } catch {
+      throw new CliUsageError("--decision-prompt must be a JSON object, or -", USAGE);
+    }
+    if (!decisionPrompt || typeof decisionPrompt !== "object" || Array.isArray(decisionPrompt)) {
+      throw new CliUsageError("--decision-prompt must be a JSON object, or -", USAGE);
+    }
+  }
   const decisionFallbackLevel = takeOption(args, "--decision-fallback-level");
   if (decisionFallbackLevel !== undefined && decisionFallbackLevel !== "-"
     && !(JEV_LEVEL_IDS as readonly string[]).includes(decisionFallbackLevel)) {
@@ -145,6 +155,7 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   for (const [flag, value] of [
     ["--decision-mode", decisionMode],
     ["--decision-levels", decisionLevelsRaw],
+    ["--decision-prompt", decisionPromptRaw],
     ["--decision-fallback-level", decisionFallbackLevel],
   ] as const) {
     if (value !== undefined && value !== "-" && strategy !== "jev") {
@@ -168,6 +179,7 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (decisionQuota !== undefined) combo.decisionQuotaSignals = decisionQuota === "-" ? null : decisionQuota === "on";
   if (decisionMode !== undefined) combo.decisionMode = decisionMode === "-" ? null : decisionMode;
   if (decisionLevelsRaw !== undefined) combo.decisionLevels = decisionLevelsRaw === "-" ? null : decisionLevels;
+  if (decisionPromptRaw !== undefined) combo.decisionPrompt = decisionPromptRaw === "-" ? null : decisionPrompt;
   if (decisionFallbackLevel !== undefined) {
     combo.decisionFallbackLevel = decisionFallbackLevel === "-" ? null : decisionFallbackLevel;
   }

@@ -473,3 +473,17 @@ backup can restore the configuration; store exported files as secrets.
 `ocx usage` reads the connected hub with this client's enrolled data key. Human output identifies the hub source and client-key scope; `--json` returns the same scoped data. Range, surface, provider/model filters and custom `--since`/`--until` bounds remain available. Account breakdowns and other clients' records are not shared. An old or unavailable hub produces an explicit error instead of substituting local usage; upgrade the hub if it does not support this read.
 
 The read-only data-plane endpoint is `GET /v1/usage`, using `x-opencodex-api-key` with a configured client key. Environment-wide and admin keys are refused. It accepts `range`, `surface`, `provider`, `model`, `since`, and `until`; unknown/repeated options and caller-selected key IDs are rejected. Oversized skipped rows retain the explicit incomplete-history warning.
+
+#### Decision prompt
+
+`ocx combo set <id> --strategy jev --targets <targets> --decision-prompt <json|->` sets the JEV-only
+`decisionPrompt` object; `-` sends null to clear it. Omission preserves it. The JSON keys are
+`levelInstructions` and `route.{question,objective,evidence,neutrality,speed,effortProfiles}`;
+`effortProfiles` accepts `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`. A supplied object replaces
+all stored prompt overrides. Empty objects select the unchanged defaults. Present text is trimmed,
+non-empty, at most 512 characters, and allows only tab/LF/CR among control characters. Level
+descriptions continue to use `--decision-levels`.
+
+See [the default instruction and description list](/guides/combos/#built-in-wording-unchanged).
+Changing decision wording can change routing accuracy; re-evaluate after edits. The text is sent
+to the decision service; do not include secrets or private paths.

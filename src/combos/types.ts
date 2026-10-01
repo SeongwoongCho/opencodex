@@ -1,3 +1,4 @@
+import { jevPromptConfigIssues, normalizeJevPromptFields } from "./jev-prompt-config";
 import { isCodexReasoningEffort } from "../reasoning-effort";
 import { SUPPORTED_NATIVE_OPENAI_SLUGS } from "../codex/catalog/native-models";
 import type { OcxComboConfig, OcxComboCooldownWaitPolicy, OcxComboDefaultEffort, OcxComboDefaultEffortMode, OcxComboReasoningEffortMode, OcxComboStrategy, OcxComboTarget, OcxProviderConfig } from "../types";
@@ -8,7 +9,7 @@ import {
   JEV_DECISION_TIMEOUT_MIN_MS,
   isSystemOneEndpoint,
 } from "./jev-decision-contract";
-import type { JevLevelId } from "./jev-decision-contract";
+import type { JevLevelId, JevDecisionPrompt } from "./jev-decision-contract";
 import { jevLevelConfigIssues, normalizeJevLevelFields, type NormalizedJevLevels } from "./jev-level-config";
 
 export const COMBO_DEFAULT_WAIT_FOR_COOLDOWN_MS = 0;
@@ -74,6 +75,7 @@ export interface NormalizedComboConfig {
   decisionQuotaSignals?: true;
   /** JEV level mode; present only as `"level"` (omitted means `"route"`). */
   decisionMode?: "level";
+  decisionPrompt?: JevDecisionPrompt;
   /** JEV level candidate lists, canonical level order; kept in either mode. */
   decisionLevels?: NormalizedJevLevels;
   /** Explicit level-mode fallback level; absent means `"routine"`. */
@@ -344,6 +346,7 @@ export function comboConfigIssues(
     }
   }
   issues.push(...jevLevelConfigIssues(body, id));
+  issues.push(...jevPromptConfigIssues(body));
 
   if (!Array.isArray(body.targets) || body.targets.length === 0) {
     issues.push({ path: ["targets"], message: "targets must be a non-empty array" });
@@ -490,6 +493,7 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
     // Off is the default and stays sparse.
     ...(raw.decisionQuotaSignals === true ? { decisionQuotaSignals: true as const } : {}),
     ...normalizeJevLevelFields(raw),
+    ...normalizeJevPromptFields(raw),
     targets: raw.targets.map(target => ({
       provider: target.provider.trim(),
       model: target.model.trim(),

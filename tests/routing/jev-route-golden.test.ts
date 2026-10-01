@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { JEV_API_URL, resolveJevDecision, type JevCandidate, type ResolveJevDecisionOptions } from "../../src/combos/jev";
+import { resolveJevLevelDecision } from "../../src/combos/jev-level";
+import type { NormalizedJevLevels } from "../../src/combos/jev-level-config";
 import type { OcxConfig } from "../../src/types";
 import { fixturePath } from "../helpers/repo-root";
 
@@ -40,7 +42,8 @@ test("route-mode decision requests are byte-identical to the pre-level-mode reco
       bodies.push(String(init.body));
       return Response.json({});
     }) as NonNullable<ResolveJevDecisionOptions["post"]>;
-    await resolveJevDecision({
+    for (const decisionPrompt of [undefined, {}, { route: { effortProfiles: {} } }]) await resolveJevDecision({
+      decisionPrompt,
       body: golden.body,
       config,
       decisionProvider,
@@ -48,6 +51,23 @@ test("route-mode decision requests are byte-identical to the pre-level-mode reco
       fallback: { targetKey: golden.candidates[0]!.key, effort: null },
       post,
     });
-    expect(bodies).toEqual([expected]);
+    expect(bodies).toEqual([expected, expected, expected]);
+  }
+});
+
+const levelGolden = JSON.parse(readFileSync(fixturePath("jev-level-request-golden.json"), "utf8")) as {
+  levels: NormalizedJevLevels;
+  requests: Record<string, string>;
+};
+test("level-mode default request bytes match the pre-prompt-config recording", async () => {
+  for (const [decisionProvider, expected] of Object.entries(levelGolden.requests)) {
+    const bodies: string[] = [];
+    for (const decisionPrompt of [undefined, {}, { route: {} }]) await resolveJevLevelDecision({
+      body: golden.body, config, decisionProvider, decisionPrompt,
+      levels: levelGolden.levels, candidates: golden.candidates,
+      fallback: { targetKey: golden.candidates[0]!.key, effort: null },
+      post: (async (_name, _provider, _url, init) => { bodies.push(String(init.body)); return Response.json({}); }) as NonNullable<ResolveJevDecisionOptions["post"]>,
+    });
+    expect(bodies).toEqual([expected, expected, expected]);
   }
 });

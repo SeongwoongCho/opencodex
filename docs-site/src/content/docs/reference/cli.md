@@ -156,3 +156,6 @@ refreshes the update-notification cache in a detached process, and
 implementation details, not stable user-facing commands. The dashboard records the worker PID,
 recovers an active job whose worker died, treats older PID-less active records as stale after ten
 minutes, and protects a live worker from concurrent updates.
+
+JEV Combo wording is configurable with `ocx combo set <id> --decision-prompt <json|->`; see
+[Decision prompt](/reference/cli/agents/#decision-prompt) for the field shape and privacy caveat.

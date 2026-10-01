@@ -1,6 +1,6 @@
 import type { OcxProviderConfig } from "./provider";
 import type { CodexAccount } from "./accounts";
-import type { JevDecisionMode, JevLevelId } from "../combos/jev-decision-contract";
+import type { JevDecisionMode, JevLevelId, JevDecisionPrompt } from "../combos/jev-decision-contract";
 
 export interface AnthropicModelRoute {
   name: string;
@@ -1367,6 +1367,8 @@ export interface OcxComboConfig {
    * `decisionQuotaSignals: true` that pick also prefers candidates with healthier cached quota.
    */
   decisionMode?: JevDecisionMode;
+  /** JEV-only decision wording overrides; sent to the decision service. */
+  decisionPrompt?: JevDecisionPrompt;
   /**
    * `strategy: "jev"` only: per-level candidate lists for `decisionMode: "level"`. Every candidate
    * names one of `targets` and, optionally, an effort that target allows. Kept while the mode is

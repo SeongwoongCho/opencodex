@@ -2,6 +2,8 @@ import { isCodexReasoningEffort, resolveEffortAtOrBelow } from "../reasoning-eff
 import type { OcxComboDefaultEffort } from "../types";
 import {
   JEV_DEFAULT_FALLBACK_LEVEL,
+  JEV_LEVEL_INSTRUCTIONS,
+  type JevDecisionPrompt,
   JEV_LEVEL_DEFAULT_DESCRIPTIONS,
   type JevLevelId,
   type JevLevelPath,
@@ -31,7 +33,7 @@ import { configuredJevLevelIds, type NormalizedJevLevel, type NormalizedJevLevel
  * from the same cached tiers route mode sends, so it is reliable instead of advisory.
  */
 
-export const JEV_LEVEL_INSTRUCTIONS = "Classify how demanding the work for the next model call is. Judge from the task and any tool evidence.";
+export { JEV_LEVEL_INSTRUCTIONS } from "./jev-decision-contract";
 
 /** Self-hosted System One choice questions accept 2..26 options. */
 const MIN_LEVEL_OPTIONS = 2;
@@ -57,12 +59,12 @@ export interface ResolveJevLevelDecisionOptions extends Omit<ResolveJevDecisionO
 }
 
 /** The single `level` choice question: configured levels in canonical order, plain string criteria. */
-export function buildJevLevelQuestion(levels: NormalizedJevLevels): Record<string, unknown> {
+export function buildJevLevelQuestion(levels: NormalizedJevLevels, decisionPrompt?: JevDecisionPrompt): Record<string, unknown> {
   const criteria: Record<string, string> = {};
   for (const id of configuredJevLevelIds(levels)) {
     criteria[id] = levels[id]?.description ?? JEV_LEVEL_DEFAULT_DESCRIPTIONS[id];
   }
-  return { level: { type: "choice", instructions: JEV_LEVEL_INSTRUCTIONS, criteria } };
+  return { level: { type: "choice", instructions: decisionPrompt?.levelInstructions ?? JEV_LEVEL_INSTRUCTIONS, criteria } };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -154,7 +156,7 @@ export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOp
     // Target notes describe targets, which this question does not offer.
     const state = buildJevState(options.body);
     if (!hasJevDecisionState(state)) return "no_state";
-    const body = JSON.stringify({ model: endpoint.model, state, questions: buildJevLevelQuestion(options.levels) });
+    const body = JSON.stringify({ model: endpoint.model, state, questions: buildJevLevelQuestion(options.levels, options.decisionPrompt) });
     return fitsJevRequestBytes(body) ? { body } : "invalid";
   });
   if ("gate" in exchanged) return failed(exchanged.gate);

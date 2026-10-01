@@ -547,6 +547,7 @@ export async function executeComboResponses(
     const decisionOptions = {
       body,
       candidates,
+      decisionPrompt: combo.decisionPrompt,
       fallback,
       config,
       ...(combo.decisionProvider ? { decisionProvider: combo.decisionProvider } : {}),

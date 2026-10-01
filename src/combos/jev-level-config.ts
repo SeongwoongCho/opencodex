@@ -4,6 +4,7 @@ import {
   JEV_DECISION_MODES,
   JEV_LEVEL_IDS,
   JEV_LEVEL_MAX_CANDIDATES,
+  JEV_LEVEL_DEFAULT_DESCRIPTIONS,
   type JevDecisionMode,
   type JevLevelId,
 } from "./jev-decision-contract";
@@ -208,10 +209,10 @@ export function jevLevelConfigIssues(body: Record<string, unknown>, comboId = "<
   return issues;
 }
 
-function normalizedLevel(raw: OcxComboDecisionLevel): NormalizedJevLevel {
+function normalizedLevel(raw: OcxComboDecisionLevel, id: JevLevelId): NormalizedJevLevel {
   const description = typeof raw.description === "string" ? raw.description.trim() : "";
   return {
-    ...(description ? { description } : {}),
+    ...(description && description !== JEV_LEVEL_DEFAULT_DESCRIPTIONS[id] ? { description } : {}),
     candidates: (Array.isArray(raw.candidates) ? raw.candidates : []).map(candidate => ({
       provider: String(candidate.provider).trim(),
       model: String(candidate.model).trim(),
@@ -236,7 +237,7 @@ export function normalizeJevLevelFields(raw: {
     decisionLevels = {};
     for (const id of JEV_LEVEL_IDS) {
       const level = raw.decisionLevels[id];
-      if (isRecord(level)) decisionLevels[id] = normalizedLevel(level as unknown as OcxComboDecisionLevel);
+      if (isRecord(level)) decisionLevels[id] = normalizedLevel(level as unknown as OcxComboDecisionLevel, id);
     }
   }
   return {

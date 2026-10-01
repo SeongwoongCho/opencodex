@@ -438,22 +438,30 @@ describe("level-mode combo fields", () => {
       saveConfig(cfg);
       const saved = await api(cfg, "PUT", {
         id: "auto",
-        combo: { strategy: "jev", targets, decisionMode: "level", decisionLevels: twoLevels, decisionFallbackLevel: "trivial" },
+        combo: { strategy: "jev", targets, decisionMode: "level", decisionLevels: twoLevels, decisionFallbackLevel: "trivial", decisionPrompt: { levelInstructions: " Custom level. " } },
       });
       expect(saved.status).toBe(200);
       expect(cfg.combos?.auto).toMatchObject({ decisionMode: "level", decisionLevels: twoLevels, decisionFallbackLevel: "trivial" });
       const disk = JSON.parse(readFileSync(getConfigPath(), "utf8")) as OcxConfig;
       expect(disk.combos?.auto?.decisionLevels).toEqual(twoLevels as never);
+      expect(disk.combos?.auto?.decisionPrompt).toEqual({ levelInstructions: "Custom level." });
       const listed = await (await api(cfg, "GET")).json() as { combos: unknown[] };
       expect(listed.combos).toEqual([expect.objectContaining({ id: "auto", decisionMode: "level", decisionLevels: twoLevels })]);
 
       // The dashboard shape: only decisionMode is sent; the levels ride along untouched.
       expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionMode: null } })).status).toBe(200);
+      expect(cfg.combos?.auto?.decisionPrompt).toEqual({ levelInstructions: "Custom level." });
       expect(cfg.combos?.auto).not.toHaveProperty("decisionMode");
       expect(cfg.combos?.auto).toMatchObject({ decisionLevels: twoLevels, decisionFallbackLevel: "trivial" });
       expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionMode: "level" } })).status).toBe(200);
       expect(cfg.combos?.auto).toMatchObject({ decisionMode: "level", decisionLevels: twoLevels });
 
+      const described = { ...twoLevels, trivial: { ...twoLevels.trivial, description: "Custom trivial." } };
+      expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevels: described } })).status).toBe(200);
+      expect(cfg.combos?.auto?.decisionLevels?.trivial?.candidates).toEqual(twoLevels.trivial.candidates as never);
+      expect(cfg.combos?.auto?.decisionLevels?.trivial?.description).toBe("Custom trivial.");
+      expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionPrompt: null } })).status).toBe(200);
+      expect(cfg.combos?.auto).not.toHaveProperty("decisionPrompt");
       const cleared = await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevels: null } });
       expect(cleared.status).toBe(400);
       expect(await cleared.json()).toEqual({ error: 'decisionMode "level" requires decisionLevels' });
@@ -474,7 +482,9 @@ describe("level-mode combo fields", () => {
         combo: { strategy: "jev", targets, decisionMode: "level", decisionLevels: twoLevels, decisionFallbackLevel: "trivial" },
       });
 
+      expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionPrompt: { route: { speed: "Custom speed." } } } })).status).toBe(200);
       expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "failover", targets } })).status).toBe(200);
+      expect(cfg.combos?.auto).not.toHaveProperty("decisionPrompt");
       for (const field of ["decisionMode", "decisionLevels", "decisionFallbackLevel"]) {
         expect(cfg.combos?.auto).not.toHaveProperty(field);
       }

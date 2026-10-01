@@ -1,3 +1,5 @@
+import { JevDecisionPromptFields } from "./combo-workspace-jev-prompt";
+import type { JevDecisionPrompt } from "../../../src/combos/jev-decision-contract";
 import { useState } from "react";
 import type { ComboDecisionLevels, ComboEffort, ComboStrategy, ComboTarget, JevLevelId, ProviderQuotaStates } from "../combo-workspace-data";
 import { comboImagesSupported } from "../combo-capabilities";
@@ -162,6 +164,7 @@ export function JevDecisionFields({
   decisionTimeoutMs,
   decisionQuotaSignals,
   decisionMode,
+  decisionPrompt,
   decisionLevels,
   decisionFallbackLevel,
   comboId = "",
@@ -176,6 +179,7 @@ export function JevDecisionFields({
   decisionTimeoutMs: number | null;
   decisionQuotaSignals: boolean;
   decisionMode?: "level";
+  decisionPrompt?: JevDecisionPrompt;
   decisionLevels?: ComboDecisionLevels;
   decisionFallbackLevel?: JevLevelId;
   comboId?: string;
@@ -187,7 +191,9 @@ export function JevDecisionFields({
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
     decisionMode?: "level";
-    decisionLevels?: undefined;
+    decisionLevels?: ComboDecisionLevels;
+    decisionPrompt?: JevDecisionPrompt;
+    decisionLevelsEdited?: true;
     decisionFallbackLevel?: undefined;
     clearDecisionLevels?: true;
   }) => void;
@@ -285,6 +291,14 @@ export function JevDecisionFields({
           {t(decisionMode === "level" ? "cws.jev.quotaSignalsLevelHint" : "cws.jev.quotaSignalsHint")}
         </p>
       </div>
+      <JevDecisionPromptFields
+        idPrefix={idPrefix}
+        decisionMode={decisionMode}
+        decisionPrompt={decisionPrompt}
+        decisionLevels={decisionLevels}
+        disabled={disabled}
+        onChange={onChange}
+      />
       <JevDecisionModeField
         idPrefix={idPrefix}
         comboId={comboId}

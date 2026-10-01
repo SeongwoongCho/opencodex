@@ -947,6 +947,7 @@
     "jev-level-mode.test.ts": "routing",
     "jev-quota-warmer.test.ts": "routing",
     "jev-route-golden.test.ts": "routing",
+    "jev-decision-prompt.test.ts": "routing",
     "jev-provider.test.ts": "providers",
     "keyring-smoke.test.ts": "ci-workflows",
     "kilo-client.test.ts": "clients",

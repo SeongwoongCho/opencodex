@@ -239,8 +239,11 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         && requestedCombo.strategy === "jev"
         ? { decisionQuotaSignals: previous.decisionQuotaSignals }
         : {}),
-      // Level-mode fields follow the same rule. The dashboard sends only decisionMode, so its
-      // round-trip keeps levels it cannot edit.
+      ...(!Object.hasOwn(requestedCombo, "decisionPrompt")
+        && previous?.decisionPrompt !== undefined && requestedCombo.strategy === "jev"
+        ? { decisionPrompt: previous.decisionPrompt } : {}),
+      // Level-mode fields follow the same rule. The dashboard omits unedited levels,
+      // preserving candidate lists when it only changes the decision mode.
       ...(!Object.hasOwn(requestedCombo, "decisionMode")
         && previous?.decisionMode !== undefined
         && requestedCombo.strategy === "jev"

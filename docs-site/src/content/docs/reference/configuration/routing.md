@@ -423,3 +423,18 @@ The history index is disposable - deleting `routing-history.sqlite` triggers
 an automatic rebuild from `usage.jsonl` on the next query; `ocx logs
 rebuild-index` forces one. Nothing in this system auto-tunes weights,
 budgets, or candidate sets.
+
+### Decision prompt overrides
+
+JEV Combos accept `decisionPrompt?: { levelInstructions?: string; route?: { question?: string;
+objective?: string; evidence?: string; neutrality?: string; speed?: string;
+effortProfiles?: Partial<Record<"low" | "medium" | "high" | "xhigh" | "max" | "ultra", string>> } }`.
+Level descriptions remain in `decisionLevels.<id>.description`. Empty objects and omitted fields
+keep defaults; present strings are trimmed, non-empty, bounded to 512 characters, and permit only
+tab/LF/CR control characters. Management omission preserves overrides while JEV remains selected;
+null clears them. The dashboard shows effective text and per-field reset controls.
+
+See [the complete unchanged defaults](/guides/combos/#built-in-wording-unchanged).
+Changing decision wording can change routing accuracy; re-evaluate after edits. This text is sent to
+the decision service: keep secrets and private paths out. The 65,536-byte request limit and fail-open
+`invalid` gate still apply.

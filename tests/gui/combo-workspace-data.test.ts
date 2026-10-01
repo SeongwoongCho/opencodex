@@ -130,6 +130,7 @@ describe("combo-workspace-data", () => {
         decisionTimeoutMs: null,
         decisionQuotaSignals: false,
         decisionMode: null,
+        decisionPrompt: null,
       },
     });
   });
