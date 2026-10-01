@@ -3662,7 +3662,7 @@ export const en = {
   "cws.plan.run": "Show candidate paths",
   "cws.plan.savedOnly": "Shows the saved combo. Save your changes to preview them.",
   "cws.jev.promptTitle": "Decision prompt",
-  "cws.jev.promptHint": "Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Re-evaluate after edits. Changing decision wording can change routing accuracy; re-evaluate after edits. This text is sent to the decision service; do not include secrets or private paths.",
+  "cws.jev.promptHint": "Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Changing decision wording can change routing accuracy; re-evaluate after edits. This text is sent to the decision service; do not include secrets or private paths.",
   "cws.jev.promptReset": "Reset to default",
   "cws.jev.promptLevel": "Level instruction",
   "cws.jev.promptDescription": "Description: {level}",
