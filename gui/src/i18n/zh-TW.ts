@@ -3614,7 +3614,7 @@ export const zhTW: Record<TKey, string> = {
   "cws.plan.run": "顯示路徑",
   "cws.plan.savedOnly": "顯示的是已儲存的組合。請先儲存變更再預覽。",
   "cws.jev.promptTitle": "決策提示詞",
-  "cws.jev.promptHint": "更改決策措辭可能改變路由準確率；編輯後請重新評估。此文字會傳送至決策服務；請勿包含機密或私人路徑。",
+  "cws.jev.promptHint": "等級描述影響最大；指令文字對 tev1 類決策模型影響很小。編輯後請重新評估。 更改決策措辭可能改變路由準確率；編輯後請重新評估。此文字會傳送至決策服務；請勿包含機密或私人路徑。",
   "cws.jev.promptReset": "重設為預設值",
   "cws.jev.promptLevel": "等級指令",
   "cws.jev.promptDescription": "描述：{level}",

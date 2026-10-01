@@ -3650,7 +3650,7 @@ export const ko: Record<TKey, string> = {
   "cws.plan.run": "경로 보기",
   "cws.plan.savedOnly": "저장된 콤보를 보여 줍니다. 변경 사항을 미리 보려면 먼저 저장하세요.",
   "cws.jev.promptTitle": "판단 프롬프트",
-  "cws.jev.promptHint": "판단 문구를 변경하면 라우팅 정확도가 달라질 수 있으므로 수정 후 다시 평가하세요. 이 텍스트는 판단 서비스로 전송됩니다. 비밀 정보나 개인 경로를 넣지 마세요.",
+  "cws.jev.promptHint": "레벨 설명이 가장 큰 영향을 줍니다. 지시문은 tev1 계열 판단 모델에 미치는 영향이 작습니다. 수정 후 다시 평가하세요. 판단 문구를 변경하면 라우팅 정확도가 달라질 수 있으므로 수정 후 다시 평가하세요. 이 텍스트는 판단 서비스로 전송됩니다. 비밀 정보나 개인 경로를 넣지 마세요.",
   "cws.jev.promptReset": "기본값으로 재설정",
   "cws.jev.promptLevel": "레벨 지시문",
   "cws.jev.promptDescription": "설명: {level}",

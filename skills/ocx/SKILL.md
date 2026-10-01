@@ -190,7 +190,7 @@ believe `ocx capabilities --json`.
 
 ## JEV Combo decision wording
 
-`ocx combo set <id> --strategy jev --targets <provider/model,...> --decision-prompt <json|->`
+`ocx combo set <id> --decision-prompt <json|->`
 sets per-Combo decision wording. The JSON object supports `levelInstructions` and
 `route.{question,objective,evidence,neutrality,speed,effortProfiles}`; effort profiles are keyed by
 `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. Like `--decision-levels`, omission preserves the
@@ -200,3 +200,5 @@ Text is trimmed, non-empty when present, at most 512 characters, and permits onl
 Changing decision wording can change routing accuracy; re-evaluate after edits. These strings go to
 the decision service: never include secrets or private paths. Dashboard Config → Decision prompt
 shows effective text and per-field resets without changing candidates.
+
+For existing combos, omit `--targets` to update only supplied flags while preserving all target settings. New combos require `--targets`; supplying it replaces targets. Use `-` to clear optional decision fields.

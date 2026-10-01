@@ -9,7 +9,7 @@ afterEach(() => {
   process.exitCode = 0;
 });
 
-function fakeRuntime() {
+function fakeRuntime(combos: Record<string, unknown>[] = []) {
   const requests: Recorded[] = [];
   const server = Bun.serve({
     port: 0,
@@ -17,7 +17,7 @@ function fakeRuntime() {
       const url = new URL(req.url);
       const body = req.method === "GET" ? null : await req.json().catch(() => null);
       requests.push({ path: `${url.pathname}${url.search}`, method: req.method, body });
-      return Response.json({ ok: true });
+      return Response.json(req.method === "GET" ? { combos } : { ok: true });
     },
   });
   servers.push(server);
@@ -101,5 +101,31 @@ describe("ocx combo set decision prompt", () => {
         expect(runtime.requests).toEqual([]);
       }
     } finally { errorSpy.mockRestore(); }
+  });
+});
+
+
+describe("partial combo updates", () => {
+  test("preserves target settings and unmentioned fields, and clears decision fields", async () => {
+    const targets = [{ provider: "a", model: "m", reasoningEfforts: ["low", "high"], modelProfile: { description: "Profile" }, weight: 3, lastResort: true }];
+    const runtime = fakeRuntime([{ id: "existing", strategy: "jev", targets, stickyLimit: 7, alias: "kept", defaultEffort: "high", defaultEffortMode: "force", decisionPrompt: { levelInstructions: "Custom" }, decisionMode: "level" }]);
+    const log = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await handleComboCommand(["set", "existing", "--decision-levels", JSON.stringify(levels), "--json"], runtime.deps)).toBe(0);
+      expect(await handleComboCommand(["set", "existing", "--effort", "-", "--decision-prompt", "-", "--decision-mode", "-", "--alias", "-", "--json"], runtime.deps)).toBe(0);
+    } finally { log.mockRestore(); }
+    const puts = runtime.requests.filter(row => row.method === "PUT").map(row => (row.body as { combo: Record<string, unknown> }).combo);
+    expect(puts[0]).toMatchObject({ strategy: "jev", targets, stickyLimit: 7, alias: "kept", decisionLevels: levels, decisionMode: "level", decisionPrompt: { levelInstructions: "Custom" } });
+    expect(puts[0]).not.toHaveProperty("id");
+    expect(puts[1]).toMatchObject({ targets, defaultEffort: null, defaultEffortMode: "force", decisionPrompt: null, decisionMode: null, alias: "" });
+  });
+  test("create without targets gives a clear error and never writes", async () => {
+    const runtime = fakeRuntime();
+    const error = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await handleComboCommand(["set", "new", "--strategy", "jev"], runtime.deps)).toBe(2);
+      expect(error.mock.calls.flat().join(" ")).toContain("--targets is required when creating a combo");
+    } finally { error.mockRestore(); }
+    expect(runtime.requests.map(row => row.method)).toEqual(["GET"]);
   });
 });

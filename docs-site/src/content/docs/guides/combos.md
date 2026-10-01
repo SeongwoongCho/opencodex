@@ -492,6 +492,8 @@ one override. Candidate lists remain read-only, and description edits preserve t
 same prompt controls appear in the add modal; new level candidate lists still come from the CLI,
 config file, or API.
 
+Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Re-evaluate after edits. In route mode, the option strings (criteria) similarly drive decisions more than instruction wording.
+
 **Changing decision wording can change routing accuracy; re-evaluate after edits.** The instruction,
 effort-profile text, and level descriptions are sent to the configured decision service with each
 applicable decision. Do not include secrets or private paths.
@@ -503,7 +505,7 @@ whole override object, so include overrides you want to retain. The CLI mirrors 
 ```bash
 ocx combo set auto --strategy jev --targets example/model-a,example/model-b \
   --decision-prompt '{"levelInstructions":"Classify the demand of the next call."}'
-ocx combo set auto --strategy jev --targets example/model-a,example/model-b --decision-prompt -
+ocx combo set auto --decision-prompt -
 ```
 
 #### Built-in wording (unchanged)
@@ -920,3 +922,6 @@ validation message.
 
 The error was terminal rather than target-specific. Fix invalid input, reduce an oversized context,
 handle a policy refusal, or correct the rejected request origin. Combos do not hop for those cases.
+
+
+For existing combos, `ocx combo set <id>` accepts omitted `--targets`: only supplied flags change, preserving target reasoning efforts, model profiles, weights and last-resort settings. Creating a combo still requires `--targets`; supplying targets retains replacement behavior.

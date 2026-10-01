@@ -3628,7 +3628,7 @@ export const de: Record<TKey, string> = {
   "cws.plan.run": "Pfade anzeigen",
   "cws.plan.savedOnly": "Zeigt die gespeicherte Kombination. Speichern Sie Ihre Änderungen, um sie in der Vorschau zu sehen.",
   "cws.jev.promptTitle": "Entscheidungsprompt",
-  "cws.jev.promptHint": "Änderungen am Wortlaut können die Routing-Genauigkeit verändern; nach Änderungen erneut bewerten. Dieser Text wird an den Entscheidungsdienst gesendet; keine Geheimnisse oder privaten Pfade einfügen.",
+  "cws.jev.promptHint": "Level-Beschreibungen haben den größten Einfluss; Anweisungstext hat bei Entscheidungsmodellen der tev1-Klasse wenig Wirkung. Nach Änderungen erneut bewerten. Änderungen am Wortlaut können die Routing-Genauigkeit verändern; nach Änderungen erneut bewerten. Dieser Text wird an den Entscheidungsdienst gesendet; keine Geheimnisse oder privaten Pfade einfügen.",
   "cws.jev.promptReset": "Auf Standard zurücksetzen",
   "cws.jev.promptLevel": "Stufenanweisung",
   "cws.jev.promptDescription": "Beschreibung: {level}",

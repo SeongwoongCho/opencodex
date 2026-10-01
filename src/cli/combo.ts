@@ -7,7 +7,6 @@ import {
   runCliAction,
   runtimeRequest,
   takeFlag,
-  takeIntegerOption,
   takeOption,
   type RuntimeApiDeps,
 } from "./runtime-api";
@@ -15,9 +14,10 @@ import {
 const USAGE = `Usage:
   ocx combo [list] [--json]
   ocx combo show <id> [--json]
-  ocx combo set <id> --targets <provider/model[:weight],...>
-      [--strategy <failover|round-robin|random|least-used|reset-window|jev>] [--sticky <1-100>]
-      [--effort <low|medium|high|xhigh|max|ultra|->] [--effort-mode <fallback|force>]
+  ocx combo set <id> [--targets <provider/model[:weight],...>]
+      (targets required for create; omit to update existing combo without replacing target settings)
+      [--strategy <failover|round-robin|random|least-used|reset-window|jev>] [--sticky <1-100|->]
+      [--effort <low|medium|high|xhigh|max|ultra|->] [--effort-mode <fallback|force|->]
       (force overrides valid client effort and can increase cost/latency) [--alias <name|->]
       [--native-alias] [--display-name <label|->]
       [--decision-provider <provider|->] [--decision-timeout <ms|->] [--decision-quota <on|off|->]
@@ -77,18 +77,30 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   const wantsJson = takeFlag(args, "--json");
   if (!id) throw new CliUsageError("combo id is required", USAGE);
   const targetsRaw = takeOption(args, "--targets");
-  if (!targetsRaw) throw new CliUsageError("--targets is required", USAGE);
-  const strategy = takeOption(args, "--strategy") ?? "failover";
+  const renameFrom = takeOption(args, "--rename-from");
+  const partialCurrent = targetsRaw === undefined
+    ? await runtimeRequest<{ combos?: ComboRow[] }>("/api/combos", {}, deps)
+    : undefined;
+  const partialExisting = partialCurrent?.combos?.find(row => row.id === (renameFrom ?? id));
+  if (targetsRaw === undefined && !partialExisting) {
+    throw new CliUsageError("--targets is required when creating a combo", USAGE);
+  }
+  const strategyRaw = takeOption(args, "--strategy");
+  const strategy = strategyRaw ?? partialExisting?.strategy ?? "failover";
   if (strategy !== "failover" && strategy !== "round-robin" && strategy !== "random" && strategy !== "least-used" && strategy !== "reset-window" && strategy !== "jev") throw new CliUsageError("--strategy must be failover, round-robin, random, least-used, reset-window, or jev", USAGE);
-  const stickyLimit = takeIntegerOption(args, "--sticky", { min: 1 });
+  const stickyRaw = takeOption(args, "--sticky");
+  const stickyLimit = stickyRaw === undefined ? undefined : stickyRaw === "-" ? 1 : Number(stickyRaw);
+  if (stickyLimit !== undefined && (!Number.isInteger(stickyLimit) || stickyLimit < 1)) {
+    throw new CliUsageError("--sticky must be an integer from 1 to 100, or -", USAGE);
+  }
   if (stickyLimit !== undefined) {
     if (stickyLimit > 100) throw new CliUsageError("--sticky must be <= 100", USAGE);
     if (strategy !== "round-robin") throw new CliUsageError("--sticky applies only to round-robin", USAGE);
   }
   const effort = takeOption(args, "--effort");
   const effortMode = takeOption(args, "--effort-mode");
-  if (effortMode !== undefined && effortMode !== "fallback" && effortMode !== "force") {
-    throw new CliUsageError("--effort-mode must be fallback or force", USAGE);
+  if (effortMode !== undefined && effortMode !== "fallback" && effortMode !== "force" && effortMode !== "-") {
+    throw new CliUsageError("--effort-mode must be fallback, force, or -", USAGE);
   }
   const alias = takeOption(args, "--alias");
   const nativeAlias = takeFlag(args, "--native-alias");
@@ -162,15 +174,16 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
       throw new CliUsageError(`${flag} applies only to the jev strategy`, USAGE);
     }
   }
-  const renameFrom = takeOption(args, "--rename-from");
   rejectArgs(args, USAGE);
-  const combo: Record<string, unknown> = {
-    strategy,
-    stickyLimit: stickyLimit ?? 1,
-    targets: parseTargets(targetsRaw),
-  };
+  const combo: Record<string, unknown> = partialExisting
+    ? { ...partialExisting }
+    : { strategy, stickyLimit: stickyLimit ?? 1, targets: parseTargets(targetsRaw!) };
+  delete combo.id;
+  delete combo.model;
+  if (strategyRaw !== undefined) combo.strategy = strategy;
+  if (stickyLimit !== undefined) combo.stickyLimit = stickyLimit;
   if (effort !== undefined) combo.defaultEffort = effort === "-" ? null : effort;
-  if (effortMode !== undefined) combo.defaultEffortMode = effortMode;
+  if (effortMode !== undefined) combo.defaultEffortMode = effortMode === "-" ? "fallback" : effortMode;
   if (alias !== undefined) combo.alias = alias === "-" ? "" : alias;
   if (nativeAlias) combo.nativeAlias = true;
   if (displayName !== undefined) combo.displayName = displayName === "-" ? "" : displayName;
@@ -183,11 +196,11 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (decisionFallbackLevel !== undefined) {
     combo.decisionFallbackLevel = decisionFallbackLevel === "-" ? null : decisionFallbackLevel;
   }
-  const current = await runtimeRequest<{ combos?: ComboRow[] }>("/api/combos", {}, deps);
+  const current = partialCurrent ?? await runtimeRequest<{ combos?: ComboRow[] }>("/api/combos", {}, deps);
   const existing = (current.combos ?? []).find(row => row.id === (renameFrom ?? id));
   if (existing?.imageInput === "disabled") combo.imageInput = "disabled";
   if (effortMode === undefined && existing?.defaultEffortMode === "force") {
-    combo.defaultEffortMode = effort === "-" ? "fallback" : "force";
+    combo.defaultEffortMode = !partialExisting && effort === "-" ? "fallback" : "force";
   }
   const result = await runtimeRequest("/api/combos", {
     method: "PUT",

@@ -3620,7 +3620,7 @@ export const vi: Record<TKey, string> = {
   "cws.plan.run": "Hiển thị đường đi",
   "cws.plan.savedOnly": "Đang hiển thị combo đã lưu. Hãy lưu thay đổi để xem trước chúng.",
   "cws.jev.promptTitle": "Lời nhắc quyết định",
-  "cws.jev.promptHint": "Thay đổi câu chữ có thể thay đổi độ chính xác định tuyến; hãy đánh giá lại sau khi sửa. Văn bản này được gửi đến dịch vụ quyết định; không đưa vào bí mật hoặc đường dẫn riêng tư.",
+  "cws.jev.promptHint": "Mô tả cấp độ có ảnh hưởng lớn nhất; văn bản hướng dẫn ít tác động đến mô hình quyết định lớp tev1. Đánh giá lại sau khi sửa. Thay đổi câu chữ có thể thay đổi độ chính xác định tuyến; hãy đánh giá lại sau khi sửa. Văn bản này được gửi đến dịch vụ quyết định; không đưa vào bí mật hoặc đường dẫn riêng tư.",
   "cws.jev.promptReset": "Đặt lại mặc định",
   "cws.jev.promptLevel": "Chỉ dẫn cấp độ",
   "cws.jev.promptDescription": "Mô tả: {level}",

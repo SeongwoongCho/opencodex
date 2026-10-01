@@ -167,6 +167,8 @@ defaults; normalization trims and removes default-equivalent overrides and empty
 Management omission preserves the prompt while strategy stays JEV, null clears it, and changing
 strategy drops it. Provider-id rewrite does not inspect or alter prompt text.
 
+Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Re-evaluate after edits. In route mode, the option strings (criteria) similarly drive decisions more than instruction wording.
+
 The existing `JEV_MAX_REQUEST_BYTES` limit and fail-open `invalid` gate apply in both modes.
 `gui/src/components/combo-workspace-jev-prompt.tsx` exposes effective text in an expandable area in
 the Combo editor/add modal with per-field reset. Level descriptions still live in

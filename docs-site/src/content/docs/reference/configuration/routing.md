@@ -434,6 +434,8 @@ keep defaults; present strings are trimmed, non-empty, bounded to 512 characters
 tab/LF/CR control characters. Management omission preserves overrides while JEV remains selected;
 null clears them. The dashboard shows effective text and per-field reset controls.
 
+Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Re-evaluate after edits. In route mode, the option strings (criteria) similarly drive decisions more than instruction wording.
+
 See [the complete unchanged defaults](/guides/combos/#built-in-wording-unchanged).
 Changing decision wording can change routing accuracy; re-evaluate after edits. This text is sent to
 the decision service: keep secrets and private paths out. The 65,536-byte request limit and fail-open

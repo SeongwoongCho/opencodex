@@ -3651,7 +3651,7 @@ export const tr: Record<TKey, string> = {
   "cws.plan.run": "Yolları göster",
   "cws.plan.savedOnly": "Kaydedilmiş kombo gösteriliyor. Değişikliklerinizi önizlemek için kaydedin.",
   "cws.jev.promptTitle": "Karar istemi",
-  "cws.jev.promptHint": "Karar metnini değiştirmek yönlendirme doğruluğunu değiştirebilir; düzenlemelerden sonra yeniden değerlendirin. Bu metin karar hizmetine gönderilir; sır veya özel yol eklemeyin.",
+  "cws.jev.promptHint": "Seviye açıklamaları en çok etki eder; talimat metni tev1 sınıfı karar modellerinde az etkilidir. Düzenlemelerden sonra yeniden değerlendirin. Karar metnini değiştirmek yönlendirme doğruluğunu değiştirebilir; düzenlemelerden sonra yeniden değerlendirin. Bu metin karar hizmetine gönderilir; sır veya özel yol eklemeyin.",
   "cws.jev.promptReset": "Varsayılana sıfırla",
   "cws.jev.promptLevel": "Seviye talimatı",
   "cws.jev.promptDescription": "Açıklama: {level}",

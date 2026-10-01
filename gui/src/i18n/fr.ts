@@ -3617,7 +3617,7 @@ export const fr: Record<TKey, string> = {
   "cws.plan.run": "Afficher les chemins",
   "cws.plan.savedOnly": "Affiche le combo enregistré. Enregistrez vos modifications pour les prévisualiser.",
   "cws.jev.promptTitle": "Prompt de décision",
-  "cws.jev.promptHint": "Modifier la formulation peut changer la précision du routage ; réévaluez après modification. Ce texte est envoyé au service de décision ; ne saisissez ni secrets ni chemins privés.",
+  "cws.jev.promptHint": "Les descriptions de niveau ont le plus d’influence ; le texte des instructions a peu d’effet sur les modèles de décision de classe tev1. Réévaluez après modification. Modifier la formulation peut changer la précision du routage ; réévaluez après modification. Ce texte est envoyé au service de décision ; ne saisissez ni secrets ni chemins privés.",
   "cws.jev.promptReset": "Rétablir la valeur par défaut",
   "cws.jev.promptLevel": "Instruction de niveau",
   "cws.jev.promptDescription": "Description : {level}",

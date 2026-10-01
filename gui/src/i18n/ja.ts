@@ -3650,7 +3650,7 @@ export const ja: Record<TKey, string> = {
   "cws.plan.run": "経路を表示",
   "cws.plan.savedOnly": "保存済みのコンボを表示しています。変更をプレビューするには保存してください。",
   "cws.jev.promptTitle": "判断プロンプト",
-  "cws.jev.promptHint": "判断の文言を変更するとルーティングの精度が変わる可能性があります。編集後に再評価してください。このテキストは判断サービスに送信されます。秘密情報や個人のパスを含めないでください。",
+  "cws.jev.promptHint": "レベルの説明が最も影響します。指示文は tev1 クラスの判断モデルにはほとんど効果がありません。編集後に再評価してください。 判断の文言を変更するとルーティングの精度が変わる可能性があります。編集後に再評価してください。このテキストは判断サービスに送信されます。秘密情報や個人のパスを含めないでください。",
   "cws.jev.promptReset": "既定値に戻す",
   "cws.jev.promptLevel": "レベル指示",
   "cws.jev.promptDescription": "説明: {level}",

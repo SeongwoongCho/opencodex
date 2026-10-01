@@ -3649,7 +3649,7 @@ export const zh: Record<TKey, string> = {
   "cws.plan.run": "显示路径",
   "cws.plan.savedOnly": "显示的是已保存的组合。请先保存更改再预览。",
   "cws.jev.promptTitle": "决策提示词",
-  "cws.jev.promptHint": "更改决策措辞可能改变路由准确率；编辑后请重新评估。此文本会发送到决策服务；请勿包含秘密或私人路径。",
+  "cws.jev.promptHint": "级别描述影响最大；指令文本对 tev1 类决策模型影响很小。编辑后请重新评估。 更改决策措辞可能改变路由准确率；编辑后请重新评估。此文本会发送到决策服务；请勿包含秘密或私人路径。",
   "cws.jev.promptReset": "恢复默认值",
   "cws.jev.promptLevel": "级别指令",
   "cws.jev.promptDescription": "描述：{level}",
