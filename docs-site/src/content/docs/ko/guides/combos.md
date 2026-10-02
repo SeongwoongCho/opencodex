@@ -287,3 +287,7 @@ opencodex 인스턴스에 기록했는지 확인하세요.
 일반적인 400 오류는 종료되지만, `user`를 명시적으로 거부하거나 `reasoning.effort`/`reasoning_effort`의 지원되지 않는 값 또는 모델별 이미지 입력 거부(`param: input`)를 나타내는 구조화된 오류는 출력 시작 전에 다음 적격 대상으로 넘어갈 수 있습니다. 이 경우 쿨다운을 기록하지 않습니다. 보안 정책 거부, 취소 및 이미 시작된 출력은 재실행하지 않습니다.
 
 [Canonical compatibility details](/guides/combos/#request-local-target-compatibility).
+
+### `decisionLevelSelect`
+
+`decisionLevelSelect: "route"`는 유효한 JEV 레벨 설정에서 분류 후 선택된 레벨(또는 사용 가능한 폴백 레벨)의 대상과 추론 강도만 동적으로 선택합니다. 두 호출은 하나의 제한 시간을 공유하며 두 번째 호출 실패 시 할당량을 고려한 순서 기반 선택을 유지합니다. 분류에는 할당량을 보내지 않고 라우팅에는 참고 정보로 보냅니다. 생략은 기본 `order`이며 `order` 또는 API `null`은 저장된 선택을 지웁니다. CLI `--decision-level-select order|route|-`를 사용하며 `-`는 지우기입니다. 레벨 모드를 벗어나면 선택이 초기화됩니다.

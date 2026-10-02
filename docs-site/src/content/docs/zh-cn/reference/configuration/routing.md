@@ -134,3 +134,7 @@ CLI：`ocx logs explain <request-id>`、`ocx logs rebuild-index`、`ocx logs ind
 ## 迁移
 
 `routingProfiles` 是可选的增量配置：现有配置文件与旧 `usage.jsonl` 行均可原样加载。索引是一次性的——删除后会在下次查询时从 `usage.jsonl` 自动重建。系统不会自动调优。
+
+### `decisionLevelSelect`
+
+有效 JEV 级别配置可设置 `decisionLevelSelect: "route"`：先分类，再仅从所选级别或可用的回退级别动态选择目标和推理强度。两次调用共享截止时间，第二次失败保留配额感知的确定性备选。分类不发送配额，路由中的配额仅供参考。省略默认为 `order`；`order` 或 API `null` 清除设置。CLI 使用 `--decision-level-select order|route|-`，`-` 表示清除。离开级别模式会重置选择。

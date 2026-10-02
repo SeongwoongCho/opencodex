@@ -305,3 +305,7 @@ değişmeden ayrıştırılır. Geçmiş dizini tek kullanımlıktır -
 otomatik bir yeniden oluşturmayı tetikler; `ocx logs rebuild-index` bunu zorlar.
 Bu sistemdeki hiçbir şey ağırlıkları, bütçeleri veya aday kümelerini otomatik
 olarak ayarlamaz.
+
+### `decisionLevelSelect`
+
+Geçerli JEV seviye yapılandırmasında `decisionLevelSelect: "route"` önce sınıflandırır, sonra yalnızca seçilen veya kullanılabilir yedek seviyede hedef ve çabayı dinamik seçer. İki çağrı aynı süre sınırını paylaşır; ikinci çağrı başarısızsa kotayı gözeten belirlenmiş seçim korunur. Sınıflandırmaya kota gönderilmez; yönlendirmede kota tavsiye niteliğindedir. Varsayılan `order`; `order` veya API `null` ayarı temizler. CLI: `--decision-level-select order|route|-`; `-` temizler. Seviye modundan çıkmak seçimi sıfırlar.

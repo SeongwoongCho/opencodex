@@ -154,8 +154,9 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `decisionProvider?` | `string` | `"jev"` | `strategy: "jev"` only. `"jev"` (the same as omitting it, and stored as omission) is the TypeSafe decision service, valid without a provider row; any other value must name a configured provider with `adapter: "jev-decision"` whose `baseUrl` ends in `/systemone`. |
 | `decisionModel?` | `string` | unset | `strategy: "jev"` only, mutually exclusive with `decisionProvider`. An ordinary opencodex route (for example `ollama/qwen3:4b`) asked to pick one offered option as JSON. It runs with the selected provider's stored credentials, never the caller's, and cannot resolve to this combo, any JEV combo, or a `jev-decision` row. |
 | `decisionTimeoutMs?` | `number` | `4000` | `strategy: "jev"` only. Decision deadline before failing open, 1000–120000 ms. |
-| `decisionQuotaSignals?` | `boolean` | `false` | `strategy: "jev"` only. Route mode: attach each target's remaining-quota tier (from cached provider quota, never a fresh probe) to the decision request. Level mode: rank the level's candidates by those tiers locally; no quota is sent. |
+| `decisionQuotaSignals?` | `boolean` | `false` | `strategy: "jev"` only. Route mode: attach each target's remaining-quota tier (from cached provider quota, never a fresh probe) to the decision request. Default level selection: rank locally; no quota is sent to classification. Within-level routing sends advisory quota. |
 | `decisionMode?` | `"route" \| "level"` | `"route"` | `strategy: "jev"` only. `"level"` asks the decision backend (any decision method) only for a demand level and selects from `decisionLevels`. Stored as omission when `"route"`. |
+| `decisionLevelSelect?` | `"order" \| "route"` | `"order"` | JEV level mode only. `route` classifies then routes permitted target/effort pairs under the same deadline, keeping the deterministic backup on failure. Stored only when `route`; `order` or management null clears it. |
 | `decisionLevels?` | `object` | — | `strategy: "jev"` only; required by `decisionMode: "level"` and kept in route mode. Keys are at least two of `trivial`, `routine`, `hard`, `deep`, `agentic_heavy`, `agentic_light`; values are `{ description?: string, candidates: { provider, model, effort? }[] }` with 1–32 candidates naming Combo targets and efforts those targets allow. |
 | `decisionFallbackLevel?` | level id | `"routine"` | `strategy: "jev"` only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`, and is refused without them. |
 
@@ -186,7 +187,7 @@ only currently eligible members of `targets`; missing, failed, or invalid decisi
 eligible member, while caller cancellation remains terminal. Adding the provider or Combo never
 changes `defaultProvider` or hides direct model rows. See
 [Decision method](/guides/combos/#decision-method) for the three methods, setup, privacy bounds, and
-the one-decision-per-call contract.
+one logical decision per call; opt-in within-level routing has two backend calls sharing a deadline.
 
 ### Self-hosted decision model (e.g. Ollama tev1)
 
@@ -236,8 +237,7 @@ section under **Models → Combos**, then pick the row and set **Decision timeou
 
 `decisionQuotaSignals: true` makes a JEV Combo quota-aware. In route mode it adds each target's
 remaining subscription quota to the decision request, so the decision backend can avoid nearly
-exhausted accounts; in level mode the tiers stay local, rank that level's candidates, and no quota
-text is sent. It reads the cached rows behind
+exhausted accounts; in default level selection the tiers stay local and rank that level's candidates. Classification never receives quota; opt-in within-level routing receives advisory quota. It reads the cached rows behind
 `ocx provider quota` synchronously (never a probe; rows older than 30 minutes count as unknown) and
 uses the worst of the 5-hour, weekly, monthly, and matching model-family windows. Under 70% used is
 `healthy`, 70% to under 90% `limited`, 90% or more `nearly_exhausted`. In route mode, self-hosted
@@ -252,7 +252,7 @@ against the hosted service). Off, the request is unchanged. See
 `questions.level`, whose criteria are the configured level descriptions (the built-in text unless a
 level sets `description`) and whose state carries no target notes. The answer's `choice` must be one
 of the offered levels, and a `probabilities` map, when present, must cover exactly those levels. The
-proxy then selects, synchronously: the first candidate of that level whose target is currently
+proxy then selects by default, synchronously: the first candidate of that level whose target is currently
 eligible and still allows the candidate's effort; with `decisionQuotaSignals: true`, the first healthy
 or unknown-quota candidate, else the first limited one, else a nearly exhausted one. A level with no
 usable candidate tries `decisionFallbackLevel` (default `routine`), then fails open to the first
@@ -433,3 +433,14 @@ The history index is disposable - deleting `routing-history.sqlite` triggers
 an automatic rebuild from `usage.jsonl` on the next query; `ocx logs
 rebuild-index` forces one. Nothing in this system auto-tunes weights,
 budgets, or candidate sets.
+
+
+### Within-level routing
+
+Set `decisionLevelSelect: "route"` with `strategy: "jev"`, `decisionMode: "level"`, and valid `decisionLevels` to classify first, then let the same decision backend choose a target **and effort** from the usable selected level. If the classified level has no usable candidate, stage two uses only the usable fallback level. It never mixes levels or exposes target-wide extra efforts. An omitted effort permits only the normal default: medium, the highest supported rung below medium, or the lowest supported rung when all are higher; a target without effort control offers `none`.
+
+Both stages share one `decisionTimeoutMs` deadline. A singleton effective option needs no second call; service option limits still apply without truncation. Timeout, invalid answers, or other stage-two failures retain the exact deterministic, quota-aware level backup. Caller cancellation remains cancellation. Target retries do not classify or route again.
+
+Quota never enters classification. With `decisionQuotaSignals`, routing receives all usable level options and advisory cached quota; the backup still prefers the healthiest existing tier. Stage telemetry adds `levelSelectPath`, `levelSelectGate`, and literal-true `levelSelectQuotaSent` only when evidence was actually sent. `level`/`levelPath` and classifier confidence stay unchanged; decision tokens and elapsed time cover both stages as one logical decision. Successful routing logs a quota summary only when its request carried quota; deterministic retention keeps the locally weighed summary.
+
+Omission defaults to `order`; explicit `order` or management `null` clears the stored selector. A management PUT that omits it preserves it only while the effective JEV level configuration remains valid. Switching mode or strategy clears it without making it dormant. CLI `--decision-level-select order|route|-` supports partial updates (`-` clears). The dashboard’s **Within-level selection** control is level-only; switching away and back starts in candidate-order mode, and saving order sends an explicit null. Level lists remain read-only and the Test button remains a backend probe.

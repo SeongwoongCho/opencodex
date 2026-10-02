@@ -301,3 +301,7 @@ L’identité ou le condensat décrit les fichiers au moment de l’observation,
 
 Inspectez et modifiez en toute sécurité la configuration OpenCodex validée. `show` et `get` masquent les secrets. Importer
 valide avant d'écrire et nécessite `--yes`.
+
+### `decisionLevelSelect`
+
+Avec une configuration JEV de niveau valide, `decisionLevelSelect: "route"` classe puis choisit dynamiquement la cible et l’effort uniquement dans le niveau sélectionné ou son niveau de repli utilisable. Les deux appels partagent un délai ; un échec du second conserve le choix déterministe tenant compte des quotas. La classification ne reçoit pas les quotas ; le routage les utilise comme indication. L’omission vaut `order` ; `order` ou API `null` efface le réglage. CLI : `--decision-level-select order|route|-`, où `-` efface. Quitter le mode niveau réinitialise ce choix.

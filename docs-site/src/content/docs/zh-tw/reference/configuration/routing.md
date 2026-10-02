@@ -164,3 +164,7 @@ CLI：`ocx logs explain <request-id>`、`ocx logs rebuild-index`、`ocx logs ind
 ## 遷移
 
 `routingProfiles` 為可選且附加式：既有設定檔載入不變。舊 `usage.jsonl` 列（無 `routeDecision`）解析不變。歷史索引可拋棄——刪除 `routing-history.sqlite` 會在下一次查詢時從 `usage.jsonl` 自動重建；`ocx logs rebuild-index` 強制執行一次。此系統中沒有任何東西會自動調校權重、預算或候選集。
+
+### `decisionLevelSelect`
+
+有效 JEV 等級設定可使用 `decisionLevelSelect: "route"`：先分類，再只從所選等級或可用的備援等級動態選擇目標與推理強度。兩次呼叫共用截止時間，第二次失敗保留配額感知的確定性備選。分類不傳送配額，路由中的配額僅供參考。省略預設為 `order`；`order` 或 API `null` 清除設定。CLI 使用 `--decision-level-select order|route|-`，`-` 表示清除。離開等級模式會重設選擇。

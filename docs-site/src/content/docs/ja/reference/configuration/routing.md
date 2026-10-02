@@ -126,3 +126,7 @@ CLI: `ocx logs explain <request-id>`、`ocx logs rebuild-index`、`ocx logs inde
 ## 移行
 
 `routingProfiles` は任意の追加設定です。既存の設定ファイルと古い `usage.jsonl` 行はそのまま読み込めます。インデックスは使い捨てで、削除すると次回クエリ時に `usage.jsonl` から自動再構築されます。自動チューニングは行われません。
+
+### `decisionLevelSelect`
+
+`decisionLevelSelect: "route"` は有効な JEV レベル設定で分類後、選択レベルまたは利用可能なフォールバックレベルのターゲットと推論量だけを動的に選びます。両呼び出しは期限を共有し、2回目の失敗時はクォータを考慮した決定的な選択を維持します。分類にはクォータを送らず、ルーティングでは参考情報です。省略は `order`、`order` または API の `null` は設定を消去します。CLI は `--decision-level-select order|route|-`、`-` は消去です。レベルモードを離れるとリセットされます。

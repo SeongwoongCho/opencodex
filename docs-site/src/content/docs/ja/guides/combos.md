@@ -271,3 +271,7 @@ ocx combo remove <id> --yes
 通常の 400 エラーは終了扱いですが、`user` の明示的な拒否、`reasoning.effort`/`reasoning_effort` の非対応値、またはモデル固有の画像入力拒否（`param: input`）を示す構造化エラーでは、出力開始前に次の適格なターゲットへ進めます。この不一致ではクールダウンを記録しません。安全ポリシーによる拒否、キャンセル、出力開始後の再実行は禁止のままです。
 
 [Canonical compatibility details](/guides/combos/#request-local-target-compatibility).
+
+### `decisionLevelSelect`
+
+`decisionLevelSelect: "route"` は有効な JEV レベル設定で分類後、選択レベルまたは利用可能なフォールバックレベルのターゲットと推論量だけを動的に選びます。両呼び出しは期限を共有し、2回目の失敗時はクォータを考慮した決定的な選択を維持します。分類にはクォータを送らず、ルーティングでは参考情報です。省略は `order`、`order` または API の `null` は設定を消去します。CLI は `--decision-level-select order|route|-`、`-` は消去です。レベルモードを離れるとリセットされます。

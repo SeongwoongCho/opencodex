@@ -545,7 +545,7 @@ Configure at least two in `decisionLevels`; only configured levels are offered t
 each with a built-in description you can replace with `description`. Every candidate names one of the
 Combo's `targets` by `provider` and `model`, and may name an `effort` that target allows (its
 `reasoningEfforts` when set). A candidate without `effort` uses the fail-open rule: `medium`, or the
-next lower effort the target supports.
+next lower effort the target supports, or its lowest supported rung if all are higher.
 
 ```json
 {
@@ -586,14 +586,14 @@ next lower effort the target supports.
 }
 ```
 
-- **Selection.** For the classified level, OpenCodex walks the candidates in order and skips any whose
+- **Selection (default `order`).** For the classified level, OpenCodex walks the candidates in order and skips any whose
   target is not currently eligible (cooling down, disabled, withheld as `lastResort`, or no longer
   advertising the effort), using the same eligibility as route mode. The first usable candidate wins,
   and its effort replaces the request's effort exactly as in route mode.
 - **Quota-aware selection.** With `decisionQuotaSignals: true`, the same cached quota tiers decide
   within the level: the first candidate that is healthy or has no fresh quota data, else the first
   limited one, and a nearly exhausted candidate only when nothing else in the level is usable. No
-  quota text is sent to the decision service in level mode. The background refresh described under
+  quota text is sent to the classifier or in default `order` selection; opt-in within-level routing sends advisory quota. The background refresh described under
   [Quota-aware decisions](#quota-aware-decisions) keeps the tiers fresh without the dashboard open.
 - **Fallbacks.** A decision that fails (no key, timeout, error, malformed or unknown answer) fails open
   to the first eligible target, as in route mode. A classified level with no usable candidate tries
@@ -946,3 +946,14 @@ validation message.
 
 The error was terminal rather than target-specific. Fix invalid input, reduce an oversized context,
 handle a policy refusal, or correct the rejected request origin. Combos do not hop for those cases.
+
+
+### Within-level routing
+
+Set `decisionLevelSelect: "route"` with `strategy: "jev"`, `decisionMode: "level"`, and valid `decisionLevels` to classify first, then let the same decision backend choose a target **and effort** from the usable selected level. If the classified level has no usable candidate, stage two uses only the usable fallback level. It never mixes levels or exposes target-wide extra efforts. An omitted effort permits only the normal default: medium, the highest supported rung below medium, or the lowest supported rung when all are higher; a target without effort control offers `none`.
+
+Both stages share one `decisionTimeoutMs` deadline. A singleton effective option needs no second call; service option limits still apply without truncation. Timeout, invalid answers, or other stage-two failures retain the exact deterministic, quota-aware level backup. Caller cancellation remains cancellation. Target retries do not classify or route again.
+
+Quota never enters classification. With `decisionQuotaSignals`, routing receives all usable level options and advisory cached quota; the backup still prefers the healthiest existing tier. Stage telemetry adds `levelSelectPath`, `levelSelectGate`, and literal-true `levelSelectQuotaSent` only when evidence was actually sent. `level`/`levelPath` and classifier confidence stay unchanged; decision tokens and elapsed time cover both stages as one logical decision. Successful routing logs a quota summary only when its request carried quota; deterministic retention keeps the locally weighed summary.
+
+Omission defaults to `order`; explicit `order` or management `null` clears the stored selector. A management PUT that omits it preserves it only while the effective JEV level configuration remains valid. Switching mode or strategy clears it without making it dormant. CLI `--decision-level-select order|route|-` supports partial updates (`-` clears). The dashboard’s **Within-level selection** control is level-only; switching away and back starts in candidate-order mode, and saving order sends an explicit null. Level lists remain read-only and the Test button remains a backend probe.
