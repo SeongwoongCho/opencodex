@@ -36,7 +36,8 @@ export type NormalizedJevLevels = Partial<Record<JevLevelId, NormalizedJevLevel>
 const LEVEL_ID_SET = new Set<string>(JEV_LEVEL_IDS);
 const MODE_SET = new Set<string>(JEV_DECISION_MODES);
 const MAX_DESCRIPTION_CHARS = 512;
-const DISALLOWED_CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+// U+2028/U+2029 survive JSON.stringify as raw line breaks, so they count as control text here.
+const DISALLOWED_CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u2028\u2029]/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -88,7 +89,7 @@ function levelIssues(
       || DISALLOWED_CONTROL_CHARS.test(raw.description))) {
     issues.push({
       path: [...path, "description"],
-      message: `decisionLevels.${id}.description must be a non-empty string of at most ${MAX_DESCRIPTION_CHARS} characters; only tab, line feed and carriage return are allowed among control characters`,
+      message: `decisionLevels.${id}.description must be a non-empty string of at most ${MAX_DESCRIPTION_CHARS} characters; only tab, line feed and carriage return are allowed among control and line-separator characters`,
     });
   }
   const candidates = raw.candidates;

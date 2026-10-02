@@ -373,9 +373,12 @@ describe("level-mode combo fields", () => {
     expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { candidates: [{ provider: "b", model: "m2" }, { provider: " b ", model: "m2" }] } } })).toEqual([
       "decisionLevels.deep.candidates[1] duplicates an earlier candidate of this level",
     ]);
-    expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { description: " ", candidates: [{ provider: "b", model: "m2" }] } } })).toEqual([
-      "decisionLevels.deep.description must be a non-empty string of at most 512 characters; only tab, line feed and carriage return are allowed among control characters",
-    ]);
+    const descriptionIssue = "decisionLevels.deep.description must be a non-empty string of at most 512 characters; only tab, line feed and carriage return are allowed among control and line-separator characters";
+    for (const description of [" ", "bad\u0007bell", "line\u2028separator", "para\u2029separator"]) {
+      expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { description, candidates: [{ provider: "b", model: "m2" }] } } }))
+        .toEqual([descriptionIssue]);
+    }
+    expect(issuesFor({ strategy: "jev", decisionLevels: { ...twoLevels, deep: { description: "tab\tand\nnewline\r", candidates: [{ provider: "b", model: "m2" }] } } })).toEqual([]);
     expect(issuesFor({ strategy: "jev", decisionLevels: twoLevels, decisionFallbackLevel: "expert" })).toEqual([
       "decisionFallbackLevel must be one of: trivial, routine, hard, deep, agentic_heavy, agentic_light",
     ]);

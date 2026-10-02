@@ -2175,7 +2175,7 @@ export const zhTW: Record<TKey, string> = {
   "cws.jev.stats.applied": "已套用",
   "cws.jev.stats.latency": "平均延遲",
   "cws.jev.quotaSignals": "考量帳戶剩餘配額",
-  "cws.jev.quotaSignalsHint": "在決策請求中附上每個目標的剩餘訂閱配額(充足、受限或即將耗盡),讓 JEV 避開幾乎用盡的帳戶。使用 Providers 頁面顯示的快取配額;沒有最新配額資料的目標不附帶配額資訊。",
+  "cws.jev.quotaSignalsHint": "在決策請求中附上每個目標的剩餘訂閱配額（充足、受限或即將耗盡），讓 JEV 避開幾乎用盡的帳戶。使用 Providers 頁面顯示的快取配額；沒有最新配額資料的目標不附帶配額資訊。",
   "cws.jev.quotaAwareShort": "配額感知",
   "cws.jev.decisionMode": "決策模式",
   "cws.jev.decisionModeRoute": "路由：目標與推理強度",

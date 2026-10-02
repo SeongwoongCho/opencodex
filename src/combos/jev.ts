@@ -599,35 +599,9 @@ export function parseJevDecision(
     throw new Error("unknown JEV route choice");
   }
 
-  let chosenProbability: number | undefined;
-  if (answer.probabilities !== undefined) {
-    const probabilities = answer.probabilities;
-    if (!isRecord(probabilities)) throw new Error("invalid JEV route probabilities");
-    const expected = [...options.keys()].sort();
-    const actual = Object.keys(probabilities).sort();
-    if (expected.length !== actual.length || expected.some((key, index) => key !== actual[index])) {
-      throw new Error("incomplete JEV route distribution");
-    }
-    const values = actual.map(key => probabilities[key]);
-    if (values.some(value => typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
-      throw new Error("invalid JEV route probabilities");
-    }
-    const numeric = values as number[];
-    const selected = probabilities[answer.choice] as number;
-    if (Math.abs(numeric.reduce((sum, value) => sum + value, 0) - 1) > 0.02
-      || selected < Math.max(...numeric) - 1e-6) {
-      throw new Error("inconsistent JEV route distribution");
-    }
-    chosenProbability = selected;
-  }
-
+  const chosenProbability = jevChoiceProbability(answer, [...options.keys()], "route");
   const option = options.get(answer.choice)!;
-  const confidence = typeof answer.confidence === "number"
-    && Number.isFinite(answer.confidence)
-    && answer.confidence >= 0
-    && answer.confidence <= 1
-    ? answer.confidence
-    : undefined;
+  const confidence = jevConfidence(answer.confidence);
   const usage = jevUsage(payload);
   return {
     targetKey: option.targetKey,

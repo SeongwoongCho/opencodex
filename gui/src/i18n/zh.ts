@@ -2931,7 +2931,7 @@ export const zh: Record<TKey, string> = {
   "cws.jev.stats.applied": "已应用",
   "cws.jev.stats.latency": "平均延迟",
   "cws.jev.quotaSignals": "考虑账户剩余配额",
-  "cws.jev.quotaSignalsHint": "在决策请求中附带每个目标的剩余订阅配额(充足、受限或即将耗尽),让 JEV 避开几乎用尽的账户。使用 Providers 页面显示的缓存配额;没有最新配额数据的目标不附带配额信息。",
+  "cws.jev.quotaSignalsHint": "在决策请求中附带每个目标的剩余订阅配额（充足、受限或即将耗尽），让 JEV 避开几乎用尽的账户。使用 Providers 页面显示的缓存配额；没有最新配额数据的目标不附带配额信息。",
   "cws.jev.quotaAwareShort": "配额感知",
   "cws.jev.decisionMode": "决策模式",
   "cws.jev.decisionModeRoute": "路由：目标与推理强度",
