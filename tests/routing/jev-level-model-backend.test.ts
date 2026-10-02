@@ -4,7 +4,8 @@ import { resolveJevComboDecision } from "../../src/combos/jev-dispatch";
 import { JEV_LEVEL_DEFAULT_DESCRIPTIONS } from "../../src/combos/jev-decision-contract";
 import { JEV_MODEL_LEVEL_INSTRUCTIONS, resolveJevLevelDecision } from "../../src/combos/jev-level";
 import type { NormalizedJevLevels } from "../../src/combos/jev-level-config";
-import { JevModelInvokeError, type JevModelInvoke, type JevModelInvokeRequest } from "../../src/combos/jev-model-backend";
+import { buildJevModelPrompt, JEV_MODEL_INSTRUCTIONS, JevModelInvokeError, resolveJevModelDecision, type JevModelInvoke, type JevModelInvokeRequest } from "../../src/combos/jev-model-backend";
+import { JEV_MAX_REQUEST_BYTES } from "../../src/combos/jev";
 import type { OcxConfig } from "../../src/types";
 
 const config = { port: 0, defaultProvider: "openai", providers: {} } as unknown as OcxConfig;
@@ -73,6 +74,39 @@ describe("level mode through a decision model", () => {
     });
     expect(route).toMatchObject({ backend: "model", gate: "apply", targetKey: "b/deep", effort: "xhigh" });
     expect(route).not.toHaveProperty("levelPath");
+  });
+
+  test("route mode drops quota evidence instead of failing when it alone overflows the prompt cap", async () => {
+    const quota = { tier: "nearly_exhausted" as const, usedPercent: 97, window: "weekly" };
+    const efforts = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+    const build = (length: number, withQuota: boolean): JevCandidate[] => Array.from({ length: 10 }, (_, i) => {
+      const provider = `p${i}`.padEnd(length, "p");
+      const model = `m${i}`.padEnd(length, "m");
+      return { key: `${provider}/${model}`.slice(0, 512), provider, model, reasoningEfforts: efforts, ...(withQuota ? { quota } : {}) };
+    });
+    const sent = async (list: JevCandidate[]) => {
+      const calls: JevModelInvokeRequest[] = [];
+      const decision = await resolveJevModelDecision({
+        body, candidates: list, fallback: { targetKey: list[0]!.key, effort: null }, config,
+        decisionModel: "r/m", invokeModel: invoking(`{"choice":"${list[0]!.key}:low"}`, calls),
+      });
+      return { decision, calls };
+    };
+    // Longest names where the bare prompt fits but the quota clauses push it over the cap.
+    let length = 0;
+    for (let candidate = 255; candidate > 20; candidate -= 1) {
+      const bytes = (list: JevCandidate[]) => new TextEncoder().encode(JEV_MODEL_INSTRUCTIONS + buildJevModelPrompt({ task: body.input }, list)).byteLength;
+      if (bytes(build(candidate, false)) <= JEV_MAX_REQUEST_BYTES - 512 && bytes(build(candidate, true)) > JEV_MAX_REQUEST_BYTES) { length = candidate; break; }
+    }
+    expect(length).toBeGreaterThan(0);
+    const { decision, calls } = await sent(build(length, true));
+    expect(decision).toMatchObject({ gate: "apply", effort: "low" });
+    expect(decision).not.toHaveProperty("quotaSent");
+    expect(calls[0]!.input).not.toContain("QUOTA NEARLY EXHAUSTED");
+    // With room to spare the quota clauses are sent and reported.
+    const small = await sent(build(20, true));
+    expect(small.decision).toMatchObject({ gate: "apply", quotaSent: true });
+    expect(small.calls[0]!.input).toContain("QUOTA NEARLY EXHAUSTED");
   });
 
   test("a caller abort is rethrown by identity", async () => {

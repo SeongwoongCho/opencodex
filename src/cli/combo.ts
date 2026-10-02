@@ -198,6 +198,9 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   if (decisionLevelsRaw !== undefined) combo.decisionLevels = decisionLevelsRaw === "-" ? null : decisionLevels;
   if (decisionFallbackLevel !== undefined) {
     combo.decisionFallbackLevel = decisionFallbackLevel === "-" ? null : decisionFallbackLevel;
+  } else if (decisionLevelsRaw === "-") {
+    // A fallback level means nothing without levels; the listing row would otherwise resend it.
+    combo.decisionFallbackLevel = null;
   }
   if (strategy !== "jev") {
     delete combo.decisionProvider;

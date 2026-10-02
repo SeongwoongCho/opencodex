@@ -119,8 +119,11 @@ export function startJevQuotaWarmer(options: {
   injectedDeps = options.deps;
   intervalOverrideMs = options.intervalMs;
   schedule(options.initialDelayMs ?? INITIAL_DELAY_MS + Math.floor(Math.random() * JITTER_MS));
+  const startedGeneration = generation;
   void import("../lib/optional-shutdown-hooks")
     .then(hooks => {
+      // A stop (or restart) while the import was pending owns the hook slot now.
+      if (!running || generation !== startedGeneration) return;
       detachShutdownHook = hooks.registerOptionalShutdownHook("jev-quota-warmer", stopJevQuotaWarmer);
     })
     .catch(() => {

@@ -75,6 +75,7 @@ export async function resolveJevModelDecision(
   const now = options.now ?? Date.now;
   const startedAt = now();
   let quotaSent = false;
+  let sendsQuota = false;
   const failed = (gate: Exclude<JevDecision["gate"], "apply">): JevDecision => ({
     ...fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt), "model"),
     ...(quotaSent ? { quotaSent: true as const } : {}),
@@ -91,9 +92,16 @@ export async function resolveJevModelDecision(
     if (routeOptions.length > JEV_MODEL_MAX_OPTIONS) return failed("invalid");
     const state = buildJevState(options.body, options.candidates);
     if (!hasJevDecisionState(state)) return failed("no_state");
+    const fits = (text: string) => new TextEncoder().encode(JEV_MODEL_INSTRUCTIONS + text).byteLength <= JEV_MAX_REQUEST_BYTES;
+    const withQuota = options.candidates.some(candidate => candidate.quota !== undefined);
     input = buildJevModelPrompt(state, options.candidates);
-    if (new TextEncoder().encode(JEV_MODEL_INSTRUCTIONS + input).byteLength > JEV_MAX_REQUEST_BYTES) {
-      return failed("invalid");
+    if (!fits(input)) {
+      if (!withQuota) return failed("invalid");
+      // Quota evidence is optional: a prompt that only overflows because of it still gets a decision.
+      input = buildJevModelPrompt(state, options.candidates.map(({ quota: _quota, ...candidate }) => candidate));
+      if (!fits(input)) return failed("invalid");
+    } else {
+      sendsQuota = withQuota;
     }
   } catch {
     return failed("invalid");
@@ -102,7 +110,7 @@ export async function resolveJevModelDecision(
   const timeoutSignal = AbortSignal.timeout(jevDecisionTimeoutMs(options.timeoutMs));
   const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
   try {
-    quotaSent = options.candidates.some(candidate => candidate.quota !== undefined);
+    quotaSent = sendsQuota;
     const result = await options.invokeModel({ model: options.decisionModel, instructions: JEV_MODEL_INSTRUCTIONS, input, signal });
     if (options.signal?.aborted) throw options.signal.reason;
     if (timeoutSignal.aborted) return failed("timeout");

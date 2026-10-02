@@ -106,6 +106,16 @@ describe("partial combo updates", () => {
     expect(put.combo).not.toHaveProperty("alias");
     expect(put.combo).not.toHaveProperty("model");
   });
+  test("clearing levels also clears a stored fallback level the listing would resend", async () => {
+    const targets = [{ provider: "a", model: "m", weight: 1, lastResort: false }];
+    const runtime = fakeRuntime([{ id: "row", strategy: "jev", targets, decisionMode: "level", decisionLevels: levels, decisionFallbackLevel: "trivial" }]);
+    const log = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await handleComboCommand(["set", "row", "--decision-mode", "-", "--decision-levels", "-", "--json"], runtime.deps)).toBe(0);
+    } finally { log.mockRestore(); }
+    const put = runtime.requests.find(row => row.method === "PUT")!.body as { combo: Record<string, unknown> };
+    expect(put.combo).toMatchObject({ decisionMode: null, decisionLevels: null, decisionFallbackLevel: null });
+  });
   test("create without targets gives a clear error and never writes", async () => {
     const runtime = fakeRuntime();
     const error = spyOn(console, "error").mockImplementation(() => {});
