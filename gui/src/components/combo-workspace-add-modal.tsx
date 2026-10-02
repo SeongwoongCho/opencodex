@@ -202,6 +202,10 @@ export function AddComboModal({
               decisionProvider={draft.decisionProvider ?? null}
               decisionModel={draft.decisionModel ?? null}
               decisionTimeoutMs={draft.decisionTimeoutMs ?? null}
+              decisionQuotaSignals={draft.decisionQuotaSignals === true}
+              decisionMode={draft.decisionMode}
+              decisionLevels={draft.decisionLevels}
+              decisionFallbackLevel={draft.decisionFallbackLevel}
               disabled={busy}
               onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
             />
