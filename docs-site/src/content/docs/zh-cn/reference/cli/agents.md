@@ -234,3 +234,7 @@ ocx system codex-cli-update attest --candidate <absolute-path> --npm-prefix <abs
 ### `ocx config <show|get|set|unset|validate|export|import> ...`
 
 检查并安全修改已验证的 OpenCodex 配置。`show` 和 `get` 会隐藏密钥。导入会先验证再写入，并且需要 `--yes`。
+
+### `decisionLevelSelect`
+
+有效 JEV 级别配置可设置 `decisionLevelSelect: "route"`：先分类，再仅从所选级别或可用的回退级别动态选择目标和推理强度。两次调用共享截止时间，第二次失败保留配额感知的确定性备选。分类不发送配额，路由中的配额仅供参考。省略默认为 `order`；`order` 或 API `null` 清除设置。CLI 使用 `--decision-level-select order|route|-`，`-` 表示清除。离开级别模式会重置选择。

@@ -299,3 +299,7 @@ Combo id 未知。回應為 HTTP 404 並帶 type `invalid_request_error`。執�
 一般 400 錯誤仍會終止請求，但明確拒絕 `user`、對 `reasoning.effort`/`reasoning_effort` 回傳不支援值，或回傳模型特定影像輸入拒絕（`param: input`）的結構化錯誤，可讓 combo 在輸出開始前嘗試下一個符合條件的目標，而不記錄冷卻時間。安全政策拒絕、取消及已開始的輸出仍不可重播。
 
 [Canonical compatibility details](/guides/combos/#request-local-target-compatibility).
+
+### `decisionLevelSelect`
+
+有效 JEV 等級設定可使用 `decisionLevelSelect: "route"`：先分類，再只從所選等級或可用的備援等級動態選擇目標與推理強度。兩次呼叫共用截止時間，第二次失敗保留配額感知的確定性備選。分類不傳送配額，路由中的配額僅供參考。省略預設為 `order`；`order` 或 API `null` 清除設定。CLI 使用 `--decision-level-select order|route|-`，`-` 表示清除。離開等級模式會重設選擇。

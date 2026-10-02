@@ -24,6 +24,17 @@ const row = {
 };
 
 describe("dashboard level-mode data", () => {
+  test("within-level route is sparse, dirty, summarized, and explicitly cleared on PUT", () => {
+    const [plain] = parseComboList({ combos: [row] });
+    const [routed] = parseComboList({ combos: [{ ...row, decisionLevelSelect: "route" }] });
+    expect(plain).not.toHaveProperty("decisionLevelSelect");
+    expect(routed!.decisionLevelSelect).toBe("route");
+    expect(draftEquals(plain!, routed!)).toBeFalse();
+    expect(toPutBody(routed!).combo.decisionLevelSelect).toBe("route");
+    expect(toPutBody(plain!).combo.decisionLevelSelect).toBeNull();
+    expect(toPutBody({ ...routed!, decisionMode: undefined }).combo.decisionLevelSelect).toBeNull();
+    expect(jevDecisionSummary(routed!, [])?.levelSelect).toBe("route");
+  });
   test("parses level mode, levels in canonical order, and the fallback level read-only", () => {
     const [item] = parseComboList({ combos: [row] });
     expect(item!.decisionMode).toBe("level");

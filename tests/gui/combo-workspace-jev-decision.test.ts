@@ -169,13 +169,13 @@ describe("JEV decision service in the combo workspace", () => {
   test("the read-only summary names the service, its endpoint and timeout", () => {
     expect(jevDecisionSummary(parseOne({ strategy: "failover" }), providers)).toBeNull();
     expect(jevDecisionSummary(parseOne({ strategy: "jev" }), providers))
-      .toEqual({ provider: null, model: null, baseUrl: null, timeoutMs: null, quotaSignals: false, mode: "route" });
+      .toEqual({ provider: null, model: null, baseUrl: null, timeoutMs: null, quotaSignals: false, mode: "route", levelSelect: "order" });
     expect(jevDecisionSummary(
       parseOne({ strategy: "jev", decisionProvider: "mytev", decisionTimeoutMs: 30000 }),
       providers,
-    )).toEqual({ provider: "mytev", model: null, baseUrl: "https://local.example/v1/systemone", timeoutMs: 30000, quotaSignals: false, mode: "route" });
+    )).toEqual({ provider: "mytev", model: null, baseUrl: "https://local.example/v1/systemone", timeoutMs: 30000, quotaSignals: false, mode: "route", levelSelect: "order" });
     expect(jevDecisionSummary(parseOne({ strategy: "jev", decisionModel: " a/m1 " }), providers))
-      .toEqual({ provider: null, model: "a/m1", baseUrl: null, timeoutMs: null, quotaSignals: false, mode: "route" });
+      .toEqual({ provider: null, model: "a/m1", baseUrl: null, timeoutMs: null, quotaSignals: false, mode: "route", levelSelect: "order" });
   });
 
   test("JEV Auto pre-fills a self-hosted decision service and keeps TypeSafe by default", () => {
@@ -343,6 +343,6 @@ describe("JEV quota signals in the combo workspace", () => {
 
   test("the overview summary reports a quota-aware JEV combo", () => {
     expect(jevDecisionSummary(parseOne({ strategy: "jev", decisionQuotaSignals: true }), providers))
-      .toEqual({ provider: null, model: null, baseUrl: null, timeoutMs: null, quotaSignals: true, mode: "route" });
+      .toEqual({ provider: null, model: null, baseUrl: null, timeoutMs: null, quotaSignals: true, mode: "route", levelSelect: "order" });
   });
 });

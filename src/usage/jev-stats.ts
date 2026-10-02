@@ -63,6 +63,9 @@ export interface PersistedJevDecisionV1 {
   level?: JevLevelId;
   /** Level-mode decisions only: whether the classified level, the fallback level, or fail-open picked. */
   levelPath?: JevLevelPath;
+  levelSelectPath?: "route" | "order_fallback";
+  levelSelectGate?: JevDecisionGate;
+  levelSelectQuotaSent?: true;
 }
 
 export interface JevStatsModelRow {
@@ -233,6 +236,12 @@ export function normalizePersistedJevDecision(value: unknown): PersistedJevDecis
   const level = levelPath && typeof value.level === "string" && JEV_LEVEL_ID_SET.has(value.level)
     ? value.level as JevLevelId
     : undefined;
+  const stageGate = typeof value.levelSelectGate === "string" && JEV_GATE_SET.has(value.levelSelectGate)
+    ? value.levelSelectGate as JevDecisionGate : undefined;
+  const stagePath = level && (levelPath === "chosen" || levelPath === "fallback_level") && gate === "apply"
+    && ((value.levelSelectPath === "route" && stageGate === "apply")
+      || (value.levelSelectPath === "order_fallback" && stageGate !== undefined && stageGate !== "apply"))
+    ? value.levelSelectPath as "route" | "order_fallback" : undefined;
   return {
     version: 1,
     comboId,
@@ -250,6 +259,7 @@ export function normalizePersistedJevDecision(value: unknown): PersistedJevDecis
     ...(quota ? { quota } : {}),
     ...(level ? { level } : {}),
     ...(levelPath ? { levelPath } : {}),
+    ...(stagePath ? { levelSelectPath: stagePath, levelSelectGate: stageGate, ...(value.levelSelectQuotaSent === true ? { levelSelectQuotaSent: true as const } : {}) } : {}),
   };
 }
 

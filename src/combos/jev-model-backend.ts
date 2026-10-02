@@ -111,6 +111,7 @@ export async function resolveJevModelDecision(
   const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
   try {
     quotaSent = sendsQuota;
+    options.onQuotaSent?.(quotaSent);
     const result = await options.invokeModel({ model: options.decisionModel, instructions: JEV_MODEL_INSTRUCTIONS, input, signal });
     if (options.signal?.aborted) throw options.signal.reason;
     if (timeoutSignal.aborted) return failed("timeout");

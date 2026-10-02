@@ -153,3 +153,20 @@ describe("partial combo updates", () => {
     expect(runtime.requests.map(row => row.method)).toEqual(["GET"]);
   });
 });
+
+test("within-level selection parses, preserves partial updates, clears dependencies, and rejects contradictions", async () => {
+  const row = { id: "existing", strategy: "jev", decisionMode: "level", decisionLevels: levels, decisionLevelSelect: "route", targets: [{ provider: "openai", model: "gpt-6-astra" }] };
+  const runtime = fakeRuntime([row]);
+  const log = spyOn(console, "log").mockImplementation(() => {});
+  const error = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    for (const flags of [["--decision-timeout", "2000"], ["--decision-level-select", "order"], ["--decision-level-select", "-"], ["--decision-mode", "route"], ["--decision-mode", "-", "--decision-levels", "-"]]) {
+      expect(await handleComboCommand(["set", "existing", ...flags, "--json"], runtime.deps)).toBe(0);
+    }
+    for (const flags of [["--decision-level-select", "true"], ["--decision-mode", "route", "--decision-level-select", "route"], ["--decision-mode", "-", "--decision-levels", "-", "--decision-level-select", "order"]]) {
+      expect(await handleComboCommand(["set", "existing", ...flags, "--json"], runtime.deps)).toBe(2);
+    }
+  } finally { log.mockRestore(); error.mockRestore(); }
+  const puts = runtime.requests.filter(r => r.method === "PUT").map(r => (r.body as { combo: Record<string, unknown> }).combo);
+  expect(puts.map(p => p.decisionLevelSelect)).toEqual(["route", "order", null, null, null]);
+});

@@ -192,7 +192,7 @@ believe `ocx capabilities --json`.
 
 `ocx combo set <id> --decision-quota <on|off|->` makes a JEV Combo quota-aware: cached provider quota
 tiers (never a fresh probe) ride along with route-mode options, and level mode ranks candidates by
-them locally without sending any quota. `--decision-mode <route|level|->` switches to level mode, where the decision method only
+them locally by default without sending quota to classification. `--decision-mode <route|level|->` switches to level mode, where the decision method only
 classifies the next call's demand level; `--decision-levels <json|->` sets the per-level candidate
 lists (each candidate names a Combo target and optionally an effort it allows) and
 `--decision-fallback-level <level|->` the level tried when the classified one has nothing usable.
@@ -201,6 +201,8 @@ least two. Omission preserves stored values and `-` clears them; clearing levels
 fallback level. For existing combos, omit `--targets` to update only supplied flags while preserving
 all target settings. Level descriptions are sent to the decision service: never include secrets or
 private paths.
+
+`ocx combo set <id> --decision-level-select order|route|-` controls within-level selection. `route` requires an effective JEV level configuration and makes a second target/effort decision within the usable selected or fallback level, sharing the classifier deadline. Omission preserves an existing selector in a partial update; `order` or `-` clears it. Leaving level mode clears it. Failure retains the deterministic quota-aware backup; quota is advisory in the second call.
 
 ## JEV Combo decision wording
 

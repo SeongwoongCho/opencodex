@@ -373,3 +373,7 @@ gérer un refus de politique ou corriger l’origine de la demande rejetée. Les
 Exception aux erreurs 400 terminales : un rejet structuré de `user`, une valeur non prise en charge pour `reasoning.effort`/`reasoning_effort`, ou un rejet d’entrée d’image propre à un modèle (`param: input`) peut faire passer le combo à la cible admissible suivante avant le début de la sortie, sans délai de refroidissement. Le refus de sécurité, l’annulation et une sortie déjà commencée restent non rejouables.
 
 [Canonical compatibility details](/guides/combos/#request-local-target-compatibility).
+
+### `decisionLevelSelect`
+
+Avec une configuration JEV de niveau valide, `decisionLevelSelect: "route"` classe puis choisit dynamiquement la cible et l’effort uniquement dans le niveau sélectionné ou son niveau de repli utilisable. Les deux appels partagent un délai ; un échec du second conserve le choix déterministe tenant compte des quotas. La classification ne reçoit pas les quotas ; le routage les utilise comme indication. L’omission vaut `order` ; `order` ou API `null` efface le réglage. CLI : `--decision-level-select order|route|-`, où `-` efface. Quitter le mode niveau réinitialise ce choix.

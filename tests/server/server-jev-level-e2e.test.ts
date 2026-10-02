@@ -228,3 +228,18 @@ describe("JEV Combo level mode", () => {
     expect(first.logCtx.jevDecision).not.toHaveProperty("levelPath");
   });
 });
+
+for (const valid of [true, false]) test(`hierarchical dispatch ${valid ? "applies" : "retains"} target and effort with bounded telemetry`, async () => {
+  let calls = 0;
+  const fetchDecision = (async () => {
+    if (++calls === 1) return Response.json({ answers: { level: { choice: "hard" } }, usage: { input_tokens: 10, output_tokens: 1 } });
+    return Response.json(valid ? { answers: { route: { choice: "astra/gpt-6-astra:xhigh" } }, usage: { inputTokens: 20, outputTokens: 2 } } : {});
+  }) as typeof fetch;
+  const config = makeConfig(fetchDecision);
+  config.combos!.auto!.decisionLevelSelect = "route";
+  const { response, logCtx, childBodies } = await execute(config);
+  expect(response.status).toBe(200);
+  expect(calls).toBe(2);
+  expect(childBodies[0]).toMatchObject({ model: valid ? "astra/gpt-6-astra" : "sol/gpt-5.6-sol", reasoning: { effort: "xhigh" } });
+  expect(logCtx.jevDecision).toMatchObject({ gate: "apply", level: "hard", levelPath: "chosen", levelSelectPath: valid ? "route" : "order_fallback", levelSelectGate: valid ? "apply" : "invalid", usage: valid ? { inputTokens: 30, outputTokens: 3, totalTokens: 33 } : { inputTokens: 10, outputTokens: 1, totalTokens: 11 } });
+});

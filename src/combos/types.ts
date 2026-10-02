@@ -82,6 +82,7 @@ export interface NormalizedComboConfig {
   decisionLevels?: NormalizedJevLevels;
   /** Explicit level-mode fallback level; absent means `"routine"`. */
   decisionFallbackLevel?: JevLevelId;
+  decisionLevelSelect?: "route";
   /** JEV decision wording overrides; only fields that differ from the built-in wording. */
   decisionPrompt?: JevDecisionPrompt;
   targets: NormalizedComboTarget[];

@@ -335,3 +335,7 @@ Kimlik veya özet yalnızca gözlem anındaki dosyaları tanımlar; kalıcı gü
 Doğrulanmış OpenCodex yapılandırmasını inceleyin ve güvenle değiştirin. `show`
 ve `get` sırları maskeler. İçe aktarma yazmadan önce doğrular ve `--yes`
 gerektirir.
+
+### `decisionLevelSelect`
+
+Geçerli JEV seviye yapılandırmasında `decisionLevelSelect: "route"` önce sınıflandırır, sonra yalnızca seçilen veya kullanılabilir yedek seviyede hedef ve çabayı dinamik seçer. İki çağrı aynı süre sınırını paylaşır; ikinci çağrı başarısızsa kotayı gözeten belirlenmiş seçim korunur. Sınıflandırmaya kota gönderilmez; yönlendirmede kota tavsiye niteliğindedir. Varsayılan `order`; `order` veya API `null` ayarı temizler. CLI: `--decision-level-select order|route|-`; `-` temizler. Seviye modundan çıkmak seçimi sıfırlar.

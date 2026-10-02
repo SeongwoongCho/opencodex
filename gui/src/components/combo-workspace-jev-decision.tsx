@@ -22,6 +22,7 @@ export type JevDecisionPatch = {
   decisionTimeoutMs?: number | null;
   decisionQuotaSignals?: boolean;
   decisionMode?: "level";
+  decisionLevelSelect?: "route";
   decisionLevels?: ComboDecisionLevels;
   decisionFallbackLevel?: undefined;
   clearDecisionLevels?: true;
@@ -59,6 +60,7 @@ export function ComboJevDecisionSection({
   decisionTimeoutMs,
   decisionQuotaSignals,
   decisionMode,
+  decisionLevelSelect,
   decisionLevels,
   decisionFallbackLevel,
   decisionPrompt,
@@ -79,6 +81,7 @@ export function ComboJevDecisionSection({
   decisionTimeoutMs: number | null;
   decisionQuotaSignals: boolean;
   decisionMode?: "level";
+  decisionLevelSelect?: "route";
   decisionLevels?: ComboDecisionLevels;
   decisionFallbackLevel?: JevLevelId;
   decisionPrompt?: JevDecisionPrompt;
@@ -309,20 +312,22 @@ export function ComboJevDecisionSection({
           {t("cws.jev.quotaSignals")}
         </label>
         <p id={`${idPrefix}-decision-quota-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
-          {t(decisionMode === "level" ? "cws.jev.quotaSignalsLevelHint" : "cws.jev.quotaSignalsHint")}
+          {t(decisionMode === "level" && decisionLevelSelect !== "route" ? "cws.jev.quotaSignalsLevelHint" : "cws.jev.quotaSignalsHint")}
         </p>
       </div>
       <JevDecisionModeField
         idPrefix={idPrefix}
         decisionMode={decisionMode}
+        decisionLevelSelect={decisionLevelSelect}
+        onSelectChange={(value) => onChange({ decisionLevelSelect: value })}
         decisionLevels={decisionLevels}
         decisionFallbackLevel={decisionFallbackLevel}
         comboId={comboId}
         staleLevelCandidates={staleLevelCandidates}
         clearRequested={clearDecisionLevels}
-        onClearLevels={() => onChange({ clearDecisionLevels: true, decisionLevels: undefined, decisionFallbackLevel: undefined })}
+        onClearLevels={() => onChange({ clearDecisionLevels: true, decisionLevels: undefined, decisionFallbackLevel: undefined, decisionLevelSelect: undefined })}
         disabled={disabled}
-        onChange={(mode) => onChange({ decisionMode: mode })}
+        onChange={(mode) => onChange({ decisionMode: mode, decisionLevelSelect: undefined })}
       />
       <JevDecisionPromptFields
         idPrefix={idPrefix}

@@ -169,3 +169,7 @@ CLI : `ocx logs explain <request-id>`, `ocx logs rebuild-index`, `ocx logs index
 
 `routingProfiles` est facultatif et uniquement additif : les fichiers de configuration existants continuent de se charger sans modification. Les anciennes lignes de `usage.jsonl` dépourvues de `routeDecision` continuent d’être analysées sans modification. L’index d’historique peut être supprimé : la suppression de `routing-history.sqlite` déclenche sa reconstruction automatique à partir de `usage.jsonl` lors de la requête suivante ; `ocx logs
 rebuild-index` force cette reconstruction. Ce système n’ajuste automatiquement ni les poids, ni les budgets, ni les ensembles de candidats.
+
+### `decisionLevelSelect`
+
+Avec une configuration JEV de niveau valide, `decisionLevelSelect: "route"` classe puis choisit dynamiquement la cible et l’effort uniquement dans le niveau sélectionné ou son niveau de repli utilisable. Les deux appels partagent un délai ; un échec du second conserve le choix déterministe tenant compte des quotas. La classification ne reçoit pas les quotas ; le routage les utilise comme indication. L’omission vaut `order` ; `order` ou API `null` efface le réglage. CLI : `--decision-level-select order|route|-`, où `-` efface. Quitter le mode niveau réinitialise ce choix.

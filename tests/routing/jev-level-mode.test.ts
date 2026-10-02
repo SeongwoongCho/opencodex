@@ -114,6 +114,19 @@ const limited: JevQuotaSignal = { tier: "limited", usedPercent: 80, window: "wee
 const exhausted: JevQuotaSignal = { tier: "nearly_exhausted", usedPercent: 97, window: "weekly" };
 
 describe("JEV level question", () => {
+  test("within-level selector validates level prerequisites and normalizes sparsely", () => {
+    const providers = { ...decisionConfig().providers, cursor: { adapter: "openai-chat" }, anthropic: { adapter: "anthropic" } } as OcxConfig["providers"];
+    const raw = { strategy: "jev", targets: eligible.map(({ provider, model, reasoningEfforts }) => ({ provider, model, reasoningEfforts })), decisionMode: "level", decisionLevels: levels };
+    for (const value of [undefined, null, "order", "route"]) {
+      expect(comboConfigIssues("auto", { ...raw, decisionLevelSelect: value }, providers)).toEqual([]);
+      const cfg = { ...decisionConfig(), providers, combos: { auto: { ...raw, decisionLevelSelect: value } } } as unknown as OcxConfig;
+      const normalized = getCombo(cfg, "auto")!;
+      if (value === "route") expect(normalized.decisionLevelSelect).toBe("route");
+      else expect(normalized).not.toHaveProperty("decisionLevelSelect");
+    }
+    for (const value of [true, false, "", "auto", {}]) expect(comboConfigIssues("auto", { ...raw, decisionLevelSelect: value }, providers).some(i => i.path[0] === "decisionLevelSelect")).toBeTrue();
+    for (const patch of [{ strategy: "failover" }, { decisionMode: "route" }, { decisionLevels: null }]) expect(comboConfigIssues("auto", { ...raw, ...patch, decisionLevelSelect: "route" }, providers).some(i => i.path[0] === "decisionLevelSelect")).toBeTrue();
+  });
   test("offers the configured levels in canonical order with the built-in descriptions", () => {
     const shuffled: NormalizedJevLevels = { deep: levels.deep, trivial: levels.trivial, hard: levels.hard };
     expect(buildJevLevelQuestion(shuffled)).toEqual({
@@ -451,10 +464,21 @@ describe("level-mode combo fields", () => {
       const listed = await (await api(cfg, "GET")).json() as { combos: unknown[] };
       expect(listed.combos).toEqual([expect.objectContaining({ id: "auto", decisionMode: "level", decisionLevels: twoLevels })]);
 
+      expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevelSelect: "route" } })).status).toBe(200);
+      expect(cfg.combos?.auto?.decisionLevelSelect).toBe("route");
+      expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets } })).status).toBe(200);
+      expect(cfg.combos?.auto?.decisionLevelSelect).toBe("route");
+      for (const clear of ["order", null]) {
+        expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevelSelect: clear } })).status).toBe(200);
+        expect(cfg.combos?.auto).not.toHaveProperty("decisionLevelSelect");
+      }
+      await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevelSelect: "route" } });
       // The dashboard shape: only decisionMode is sent; the levels ride along untouched.
       expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionMode: null } })).status).toBe(200);
       expect(cfg.combos?.auto?.decisionPrompt).toEqual({ levelInstructions: "Custom level." });
       expect(cfg.combos?.auto).not.toHaveProperty("decisionMode");
+      expect(cfg.combos?.auto).not.toHaveProperty("decisionLevelSelect");
+      expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionLevelSelect: "route" } })).status).toBe(400);
       expect(cfg.combos?.auto).toMatchObject({ decisionLevels: twoLevels, decisionFallbackLevel: "trivial" });
       expect((await api(cfg, "PUT", { id: "auto", combo: { strategy: "jev", targets, decisionMode: "level" } })).status).toBe(200);
       expect(cfg.combos?.auto).toMatchObject({ decisionMode: "level", decisionLevels: twoLevels });

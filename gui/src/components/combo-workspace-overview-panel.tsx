@@ -93,7 +93,7 @@ export function OverviewPanel({
                   <span className="muted" data-quota-signals>{t("cws.jev.quotaAwareShort")}</span>
                 )}
                 {decision.mode === "level" && (
-                  <span className="muted" data-decision-mode="level">{t("cws.jev.levelModeShort")}</span>
+                  <span className="muted" data-decision-mode="level">{t("cws.jev.levelModeShort")}{decision.levelSelect === "route" && <> · {t("cws.jev.levelSelectRoute")}</>}</span>
                 )}
                 <IconChevron width={14} height={14} style={{ marginLeft: "auto" }} aria-hidden="true" />
               </button>

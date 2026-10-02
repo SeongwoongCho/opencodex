@@ -179,6 +179,7 @@ export interface ComboItem {
   decisionQuotaSignals?: boolean;
   /** `jev` only: level mode; omitted = route mode. */
   decisionMode?: "level";
+  decisionLevelSelect?: "route";
   decisionPrompt?: JevDecisionPrompt;
   /** Draft-only: description edits preserve the stored candidate lists. */
   decisionLevelsEdited?: true;
@@ -370,6 +371,7 @@ export function parseComboList(payload: unknown): ComboItem[] {
       ...(decisionTimeoutMs !== null ? { decisionTimeoutMs } : {}),
       ...(r.decisionQuotaSignals === true ? { decisionQuotaSignals: true } : {}),
       ...(r.decisionMode === "level" ? { decisionMode: "level" as const } : {}),
+      ...(r.decisionMode === "level" && r.decisionLevelSelect === "route" ? { decisionLevelSelect: "route" as const } : {}),
       ...(decisionLevels ? { decisionLevels } : {}),
       ...normalizeJevPromptFields(r),
       ...(typeof r.decisionFallbackLevel === "string" && (JEV_LEVEL_IDS as readonly string[]).includes(r.decisionFallbackLevel)
@@ -551,6 +553,7 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
       || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
       || (a.decisionQuotaSignals === true) !== (b.decisionQuotaSignals === true)
       || (a.decisionMode ?? "route") !== (b.decisionMode ?? "route")
+      || a.decisionLevelSelect !== b.decisionLevelSelect
       || JSON.stringify(normalizeJevPromptFields(a)) !== JSON.stringify(normalizeJevPromptFields(b))
       || JSON.stringify(a.decisionLevels ?? []) !== JSON.stringify(b.decisionLevels ?? [])
       || (a.clearDecisionLevels === true) !== (b.clearDecisionLevels === true)
@@ -585,6 +588,7 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
     decisionMode?: "level" | null;
+    decisionLevelSelect?: "route" | null;
     decisionPrompt?: JevDecisionPrompt | null;
     decisionLevels?: Partial<Record<JevLevelId, { description?: string; candidates: ComboDecisionLevelCandidate[] }>> | null;
     decisionFallbackLevel?: null;
@@ -630,6 +634,7 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
             decisionQuotaSignals: item.decisionQuotaSignals === true,
             // Null selects route mode. Unedited levels and fallback survive by omission.
             decisionMode: item.decisionMode === "level" ? "level" : null,
+            decisionLevelSelect: item.decisionMode === "level" && item.decisionLevelSelect === "route" ? "route" : null,
             decisionPrompt: normalizeJevPromptFields(item).decisionPrompt ?? null,
             ...(item.decisionLevelsEdited && item.decisionLevels
               ? { decisionLevels: Object.fromEntries(item.decisionLevels.map(({ id, description, candidates }) => [id, { candidates, ...(description?.trim() ? { description: description.trim() } : {}) }])) }
@@ -865,9 +870,9 @@ export function jevDecisionServiceOptions(
 
 /** Read-only decision-service facts for a JEV combo, or null for other strategies. */
 export function jevDecisionSummary(
-  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionModel" | "decisionTimeoutMs" | "decisionQuotaSignals" | "decisionMode">,
+  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionModel" | "decisionTimeoutMs" | "decisionQuotaSignals" | "decisionMode" | "decisionLevelSelect">,
   providers: readonly { name: string; adapter?: string; baseUrl?: string }[],
-): { provider: string | null; model: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean; mode: "route" | "level" } | null {
+): { provider: string | null; model: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean; mode: "route" | "level"; levelSelect: "order" | "route" } | null {
   if (item.strategy !== "jev") return null;
   const provider = normalizeDecisionProvider(item.decisionProvider);
   const row = provider === null ? undefined : providers.find(candidate => candidate.name === provider);
@@ -878,6 +883,7 @@ export function jevDecisionSummary(
     timeoutMs: item.decisionTimeoutMs ?? null,
     quotaSignals: item.decisionQuotaSignals === true,
     mode: item.decisionMode === "level" ? "level" : "route",
+    levelSelect: item.decisionMode === "level" && item.decisionLevelSelect === "route" ? "route" : "order",
   };
 }
 

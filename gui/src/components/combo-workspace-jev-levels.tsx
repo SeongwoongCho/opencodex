@@ -10,6 +10,8 @@ export function JevDecisionModeField({
   idPrefix,
   comboId,
   decisionMode,
+  decisionLevelSelect,
+  onSelectChange,
   decisionLevels,
   decisionFallbackLevel,
   staleLevelCandidates = [],
@@ -22,6 +24,8 @@ export function JevDecisionModeField({
   /** Combo id for the CLI fix shown when stored levels no longer match the targets. */
   comboId: string;
   decisionMode: "level" | undefined;
+  decisionLevelSelect?: "route";
+  onSelectChange?: (value: "route" | undefined) => void;
   decisionLevels: ComboDecisionLevels | undefined;
   decisionFallbackLevel: JevLevelId | undefined;
   staleLevelCandidates?: readonly string[];
@@ -53,6 +57,18 @@ export function JevDecisionModeField({
       <p id={`${idPrefix}-decision-mode-hint`} className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
         {t("cws.jev.decisionModeHint")} {!hasLevels && t("cws.jev.decisionModeNoLevels")}
       </p>
+      {level && onSelectChange && (
+        <div className="cwi-field">
+          <label htmlFor={`${idPrefix}-level-select`}>{t("cws.jev.levelSelect")}</label>
+          <select id={`${idPrefix}-level-select`} className="input" value={decisionLevelSelect ?? "order"}
+            disabled={disabled} aria-describedby={`${idPrefix}-level-select-hint`}
+            onChange={(e) => onSelectChange(e.target.value === "route" ? "route" : undefined)}>
+            <option value="order">{t("cws.jev.levelSelectOrder")}</option>
+            <option value="route">{t("cws.jev.levelSelectRoute")}</option>
+          </select>
+          <p id={`${idPrefix}-level-select-hint`} className="muted">{t("cws.jev.levelSelectHint")}</p>
+        </div>
+      )}
       {staleLevelCandidates.length > 0 && (
         <p role="alert" data-jev-levels-stale style={{ fontSize: 12, margin: "8px 0 0", color: "var(--danger, #b42318)" }}>
           <Trans k="cws.jev.levelsStale" cmd={fixCommand} vars={{ candidates: staleLevelCandidates.join(", ") }} />
