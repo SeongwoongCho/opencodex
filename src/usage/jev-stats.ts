@@ -1,9 +1,11 @@
 import {
   JEV_LEVEL_IDS,
   JEV_LEVEL_PATHS,
+  JEV_LEVEL_SELECT_PATHS,
   JEV_QUOTA_TIERS,
   type JevLevelId,
   type JevLevelPath,
+  type JevLevelSelectPath,
   type JevQuotaTier,
 } from "../combos/jev-decision-contract";
 import type { OcxComboDefaultEffort } from "../types";
@@ -63,8 +65,11 @@ export interface PersistedJevDecisionV1 {
   level?: JevLevelId;
   /** Level-mode decisions only: whether the classified level, the fallback level, or fail-open picked. */
   levelPath?: JevLevelPath;
-  levelSelectPath?: "route" | "order_fallback";
+  /** Within-level routing only: whether the routed pick applied or the order pick was kept. */
+  levelSelectPath?: JevLevelSelectPath;
+  /** Within-level routing only: the route call's gate, `apply` exactly with `route`. */
   levelSelectGate?: JevDecisionGate;
+  /** Within-level routing only: the route call sent quota evidence. */
   levelSelectQuotaSent?: true;
 }
 
@@ -184,6 +189,7 @@ function normalizedDecisionUsage(value: unknown): PersistedJevDecisionV1["usage"
 const JEV_QUOTA_TIER_SET = new Set<string>(JEV_QUOTA_TIERS);
 const JEV_LEVEL_ID_SET = new Set<string>(JEV_LEVEL_IDS);
 const JEV_LEVEL_PATH_SET = new Set<string>(JEV_LEVEL_PATHS);
+const JEV_LEVEL_SELECT_PATH_SET = new Set<string>(JEV_LEVEL_SELECT_PATHS);
 /** A decision offers at most 64 targets; a larger count cannot come from a real decision. */
 const MAX_JEV_QUOTA_TARGETS = 64;
 
@@ -238,10 +244,11 @@ export function normalizePersistedJevDecision(value: unknown): PersistedJevDecis
     : undefined;
   const stageGate = typeof value.levelSelectGate === "string" && JEV_GATE_SET.has(value.levelSelectGate)
     ? value.levelSelectGate as JevDecisionGate : undefined;
-  const stagePath = level && (levelPath === "chosen" || levelPath === "fallback_level") && gate === "apply"
-    && ((value.levelSelectPath === "route" && stageGate === "apply")
-      || (value.levelSelectPath === "order_fallback" && stageGate !== undefined && stageGate !== "apply"))
-    ? value.levelSelectPath as "route" | "order_fallback" : undefined;
+  const selectPath = typeof value.levelSelectPath === "string" && JEV_LEVEL_SELECT_PATH_SET.has(value.levelSelectPath)
+    ? value.levelSelectPath as JevLevelSelectPath : undefined;
+  const stagePath = selectPath && stageGate && level && (levelPath === "chosen" || levelPath === "fallback_level")
+    && gate === "apply" && (selectPath === "route") === (stageGate === "apply")
+    ? selectPath : undefined;
   return {
     version: 1,
     comboId,

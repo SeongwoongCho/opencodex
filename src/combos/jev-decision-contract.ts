@@ -30,9 +30,13 @@ export type JevQuotaTier = (typeof JEV_QUOTA_TIERS)[number];
 export const JEV_DECISION_MODES = ["route", "level"] as const;
 export type JevDecisionMode = (typeof JEV_DECISION_MODES)[number];
 
+/** Selection within a classified level: `order` takes the first usable candidate, `route` asks the backend. */
 export const JEV_LEVEL_SELECTS = ["order", "route"] as const;
 export type JevLevelSelect = (typeof JEV_LEVEL_SELECTS)[number];
-export type JevLevelSelectPath = "route" | "order_fallback";
+
+/** Outcome of `route` selection: the routed pick applied, or the `order` pick was kept. */
+export const JEV_LEVEL_SELECT_PATHS = ["route", "order_fallback"] as const;
+export type JevLevelSelectPath = (typeof JEV_LEVEL_SELECT_PATHS)[number];
 
 /** Demand levels a level-mode decision classifies the next model call into, in canonical order. */
 export const JEV_LEVEL_IDS = ["trivial", "routine", "hard", "deep", "agentic_heavy", "agentic_light"] as const;

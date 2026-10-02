@@ -1376,8 +1376,9 @@ export interface OcxComboConfig {
   /**
    * `strategy: "jev"` only: `"route"` (the default; omitted) asks the decision model for a target
    * and effort together. `"level"` asks it only to classify the next call into one of
-   * `decisionLevels`, and ocx picks the level's first usable candidate; with
-   * `decisionQuotaSignals: true` that pick also prefers candidates with healthier cached quota.
+   * `decisionLevels`, and ocx picks the level's first usable candidate (or routes within it; see
+   * `decisionLevelSelect`); with `decisionQuotaSignals: true` that pick also prefers candidates
+   * with healthier cached quota.
    */
   decisionMode?: JevDecisionMode;
   /**
@@ -1388,6 +1389,10 @@ export interface OcxComboConfig {
   decisionLevels?: Partial<Record<JevLevelId, OcxComboDecisionLevel>>;
   /** Level tried when the classified level has no usable candidate; default `"routine"`. */
   decisionFallbackLevel?: JevLevelId;
+  /**
+   * Level mode only: `"order"` (the default; omitted) takes the level's first usable candidate,
+   * `"route"` asks the decision backend to pick among the level's candidates.
+   */
   decisionLevelSelect?: JevLevelSelect | null;
   /** JEV-only decision wording overrides, stored as given; not yet sent to the decision service. */
   decisionPrompt?: Record<string, unknown> | null;

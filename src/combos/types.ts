@@ -80,6 +80,7 @@ export interface NormalizedComboConfig {
   decisionLevels?: NormalizedJevLevels;
   /** Explicit level-mode fallback level; absent means `"routine"`. */
   decisionFallbackLevel?: JevLevelId;
+  /** Within-level routing opt-in; absent means the default `"order"` selection. */
   decisionLevelSelect?: "route";
   /** JEV decision wording overrides, carried through unchanged so a save never erases them. */
   decisionPrompt?: Record<string, unknown>;

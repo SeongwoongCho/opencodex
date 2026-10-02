@@ -125,7 +125,15 @@ describe("JEV level question", () => {
       else expect(normalized).not.toHaveProperty("decisionLevelSelect");
     }
     for (const value of [true, false, "", "auto", {}]) expect(comboConfigIssues("auto", { ...raw, decisionLevelSelect: value }, providers).some(i => i.path[0] === "decisionLevelSelect")).toBeTrue();
-    for (const patch of [{ strategy: "failover" }, { decisionMode: "route" }, { decisionLevels: null }]) expect(comboConfigIssues("auto", { ...raw, ...patch, decisionLevelSelect: "route" }, providers).some(i => i.path[0] === "decisionLevelSelect")).toBeTrue();
+    const prerequisite = 'decisionLevelSelect requires decisionMode "level" and valid decisionLevels';
+    for (const [patch, message] of [
+      [{ strategy: "failover" }, 'decisionLevelSelect is only valid with strategy "jev"'],
+      [{ decisionMode: "route" }, prerequisite],
+      [{ decisionLevels: null }, prerequisite],
+    ] as const) {
+      const issues = comboConfigIssues("auto", { ...raw, ...patch, decisionLevelSelect: "route" }, providers);
+      expect(issues.filter(i => i.path[0] === "decisionLevelSelect").map(i => i.message)).toEqual([message]);
+    }
   });
   test("offers the configured levels in canonical order with the built-in descriptions", () => {
     const shuffled: NormalizedJevLevels = { deep: levels.deep, trivial: levels.trivial, hard: levels.hard };
