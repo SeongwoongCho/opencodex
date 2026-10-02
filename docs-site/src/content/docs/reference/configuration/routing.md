@@ -158,6 +158,7 @@ namespace, and cannot use reserved bare native families such as `gpt-*`, `o1-*`,
 | `decisionMode?` | `"route" \| "level"` | `"route"` | `strategy: "jev"` only. `"level"` asks the decision backend (any decision method) only for a demand level and selects from `decisionLevels`. Stored as omission when `"route"`. |
 | `decisionLevels?` | `object` | — | `strategy: "jev"` only; required by `decisionMode: "level"` and kept in route mode. Keys are at least two of `trivial`, `routine`, `hard`, `deep`, `agentic_heavy`, `agentic_light`; values are `{ description?: string, candidates: { provider, model, effort? }[] }` with 1–32 candidates naming Combo targets and efforts those targets allow. |
 | `decisionFallbackLevel?` | level id | `"routine"` | `strategy: "jev"` only. Level tried when the classified level has no usable candidate; must be configured in `decisionLevels`, and is refused without them. |
+| `decisionPrompt?` | `object` | — | `strategy: "jev"` only. Wording overrides for the decision question: `levelInstructions` and `route` instruction fields plus `effortProfiles`. See [Decision prompt overrides](#decision-prompt-overrides). |
 
 ```json
 {
@@ -285,6 +286,24 @@ decision method; a `decisionModel` answers one level key as JSON `{"choice":"<le
 ```
 
 See [Level mode](/guides/combos/#level-mode).
+
+### Decision prompt overrides
+
+JEV Combos accept `decisionPrompt?: { levelInstructions?: string; route?: { question?: string;
+objective?: string; evidence?: string; neutrality?: string; speed?: string;
+effortProfiles?: Partial<Record<"low" | "medium" | "high" | "xhigh" | "max" | "ultra", string>> } }`.
+Level descriptions remain in `decisionLevels.<id>.description`. Empty objects and omitted fields
+keep defaults; present strings are trimmed, non-empty, bounded to 512 characters, and permit only
+tab/LF/CR control characters (U+2028 and U+2029 are rejected). With `decisionModel`, only
+`levelInstructions` reaches the model. Management omission preserves overrides while JEV remains selected;
+null clears them. The dashboard shows effective text and per-field reset controls.
+
+Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Re-evaluate after edits. In route mode, the option strings (criteria) similarly drive decisions more than instruction wording.
+
+See [the complete unchanged defaults](/guides/combos/#built-in-wording-unchanged).
+Changing decision wording can change routing accuracy; re-evaluate after edits. This text is sent to
+the decision service: keep secrets and private paths out. The 65,536-byte request limit and fail-open
+`invalid` gate still apply.
 
 ## Routing policy profiles (`config.routingProfiles`)
 

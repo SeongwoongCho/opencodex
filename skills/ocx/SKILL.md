@@ -201,3 +201,17 @@ least two. Omission preserves stored values and `-` clears them; clearing levels
 fallback level. For existing combos, omit `--targets` to update only supplied flags while preserving
 all target settings. Level descriptions are sent to the decision service: never include secrets or
 private paths.
+
+## JEV Combo decision wording
+
+`ocx combo set <id> --decision-prompt <json|->` sets per-Combo decision wording. The JSON object
+supports `levelInstructions` and `route.{question,objective,evidence,neutrality,speed,effortProfiles}`;
+effort profiles are keyed by `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. Like
+`--decision-levels`, omission preserves the stored value and `-` clears it. An object replaces all
+prompt overrides; empty objects use built-in defaults. Level descriptions remain in
+`decisionLevels.<id>.description` via `--decision-levels`. Text is trimmed, non-empty when present,
+at most 512 characters, and permits only tab/LF/CR controls. With `decisionModel`, only
+`levelInstructions` reaches the model. Changing decision wording can change routing accuracy;
+re-evaluate after edits. These strings go to the decision service: never include secrets or private
+paths. Dashboard Config → Decision prompt shows effective text and per-field resets without changing
+candidates.

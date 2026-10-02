@@ -187,6 +187,20 @@ ocx combo set tev-auto --strategy jev --decision-provider ollama-tev1 --decision
 at request time a candidate whose target no longer advertises that effort is skipped. See
 [Level mode](/guides/combos/#level-mode).
 
+#### Decision prompt
+
+`ocx combo set <id> --strategy jev --targets <targets> --decision-prompt <json|->` sets the JEV-only
+`decisionPrompt` object; `-` sends null to clear it. Omission preserves it. The JSON keys are
+`levelInstructions` and `route.{question,objective,evidence,neutrality,speed,effortProfiles}`;
+`effortProfiles` accepts `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`. A supplied object replaces
+all stored prompt overrides. Empty objects select the unchanged defaults. Present text is trimmed,
+non-empty, at most 512 characters, and allows only tab/LF/CR among control characters. Level
+descriptions continue to use `--decision-levels`.
+
+See [the default instruction and description list](/guides/combos/#built-in-wording-unchanged).
+Changing decision wording can change routing accuracy; re-evaluate after edits. The text is sent
+to the decision service; do not include secrets or private paths.
+
 See [Combos](/guides/combos/) for routing behavior and configuration guidance.
 
 ## Observability and debug
