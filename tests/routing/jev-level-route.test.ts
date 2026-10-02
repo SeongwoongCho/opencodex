@@ -126,6 +126,22 @@ describe("hierarchical service routing", () => {
     expect(aggregateJevLevelUsage({ input_tokens: -1 })).toBeUndefined();
   });
 
+  test("an exhausted budget keeps apply when the classified level has no usable candidate", async () => {
+    const empty: NormalizedJevLevels = { routine: { candidates: [{ provider: "missing", model: "gone" }] }, hard: { candidates: [{ provider: "absent", model: "gone" }] } };
+    const decide = async (levelSelect: "route" | undefined) => {
+      let clock = 0;
+      const post = posting([levelResponse()]);
+      return resolveJevComboDecision({ ...base, levels: empty, levelSelect, timeoutMs: 1000, now: () => clock, post: (async (...args) => {
+        clock = 1001;
+        return post(...args);
+      }) as typeof post });
+    };
+    const routed = await decide("route");
+    expect(routed).toMatchObject({ gate: "apply", level: "hard", levelPath: "fail_open", ...base.fallback });
+    expect(routed).not.toHaveProperty("levelSelectPath");
+    expect(routed).toEqual(await decide(undefined));
+  });
+
   for (const stage of [0, 1, 2]) test(`caller cancellation at stage ${stage} preserves TimeoutError identity`, async () => {
     const controller = new AbortController();
     const reason = new DOMException("caller deadline", "TimeoutError");

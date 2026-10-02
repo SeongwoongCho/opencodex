@@ -124,7 +124,3 @@ CLI: `ocx logs explain <request-id>`, `ocx logs rebuild-index`, `ocx logs index-
 ## 마이그레이션
 
 `routingProfiles`는 선택적 추가 설정입니다. 기존 설정 파일과 이전 `usage.jsonl` 행은 그대로 읽힙니다. 인덱스는 일회용이며 삭제 시 다음 쿼리에서 `usage.jsonl`로 자동 재구축됩니다. 자동 튜닝은 없습니다.
-
-### `decisionLevelSelect`
-
-`decisionLevelSelect: "route"`는 유효한 JEV 레벨 설정에서 분류 후 선택된 레벨(또는 사용 가능한 폴백 레벨)의 대상과 추론 강도만 동적으로 선택합니다. 두 호출은 하나의 제한 시간을 공유하며 두 번째 호출 실패 시 할당량을 고려한 순서 기반 선택을 유지합니다. 분류에는 할당량을 보내지 않고 라우팅에는 참고 정보로 보냅니다. 생략은 기본 `order`이며 `order` 또는 API `null`은 저장된 선택을 지웁니다. CLI `--decision-level-select order|route|-`를 사용하며 `-`는 지우기입니다. 레벨 모드를 벗어나면 선택이 초기화됩니다.

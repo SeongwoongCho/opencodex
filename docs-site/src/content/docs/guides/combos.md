@@ -600,7 +600,8 @@ next lower effort the target supports, or its lowest supported rung if all are h
   `decisionFallbackLevel` (default `routine`; it must be one of the configured levels and is refused
   without `decisionLevels`), then fails open.
 - **Logs.** The JEV decision record adds `level` and `levelPath` (`chosen`, `fallback_level`, or
-  `fail_open`), plus the quota tier summary over the candidates that were weighed.
+  `fail_open`), plus the quota tier summary over the candidates that were weighed. With within-level routing it
+  also adds `levelSelectPath`, `levelSelectGate`, and `levelSelectQuotaSent`.
 - **Switching modes** keeps `decisionLevels`, so you can try level mode and go back. The dashboard's
   **Decision mode** selector switches the mode and shows candidate lists read-only; edit their
   descriptions under **Decision prompt**. Edit candidate lists in the config file, with `ocx combo set <id> --strategy jev --decision-levels '<json>'`, or through the
@@ -614,6 +615,16 @@ next lower effort the target supports, or its lowest supported rung if all are h
   criteria, so it has the same shape for a self-hosted service and for canonical TypeSafe; it has
   been measured only against self-hosted `tev1`. With `decisionModel`, the model receives the same
   state and level descriptions and must answer one level key as JSON `{"choice":"<level>"}`.
+
+##### Within-level routing
+
+Set `decisionLevelSelect: "route"` with `strategy: "jev"`, `decisionMode: "level"`, and valid `decisionLevels` to classify first, then let the same decision backend choose a target **and effort** from the usable selected level. If the classified level has no usable candidate, stage two uses only the usable fallback level. It never mixes levels or exposes target-wide extra efforts. An omitted effort permits only the normal default: medium, the highest supported rung below medium, or the lowest supported rung when all are higher; a target without effort control offers `none`.
+
+Both stages share one `decisionTimeoutMs` deadline. A singleton effective option needs no second call; service option limits still apply without truncation. Timeout, invalid answers, or other stage-two failures retain the exact deterministic, quota-aware level backup. Caller cancellation remains cancellation. Target retries do not classify or route again.
+
+Quota never enters classification. With `decisionQuotaSignals`, routing receives all usable level options and advisory cached quota; the backup still prefers the healthiest existing tier. Stage telemetry adds `levelSelectPath`, `levelSelectGate`, and literal-true `levelSelectQuotaSent` only when evidence was actually sent. `level`/`levelPath` and classifier confidence stay unchanged; decision tokens and elapsed time cover both stages as one logical decision. Successful routing logs a quota summary only when its request carried quota; deterministic retention keeps the locally weighed summary.
+
+Omission defaults to `order`. Both `order` and `route` require JEV level mode with valid `decisionLevels`; storing `order` omits the field, and management `null` clears it unconditionally. A management PUT that omits it preserves it only while the effective JEV level configuration remains valid. Switching mode or strategy clears it without making it dormant. CLI `--decision-level-select order|route|-` supports partial updates; outside level mode only `-` is accepted, and it clears unconditionally. The dashboard’s **Within-level selection** control is level-only; switching away and back starts in candidate-order mode, and saving order sends an explicit null. Level lists remain read-only and the Test button remains a backend probe.
 
 ### Decision prompt wording
 
@@ -1030,14 +1041,3 @@ validation message.
 
 The error was terminal rather than target-specific. Fix invalid input, reduce an oversized context,
 handle a policy refusal, or correct the rejected request origin. Combos do not hop for those cases.
-
-
-### Within-level routing
-
-Set `decisionLevelSelect: "route"` with `strategy: "jev"`, `decisionMode: "level"`, and valid `decisionLevels` to classify first, then let the same decision backend choose a target **and effort** from the usable selected level. If the classified level has no usable candidate, stage two uses only the usable fallback level. It never mixes levels or exposes target-wide extra efforts. An omitted effort permits only the normal default: medium, the highest supported rung below medium, or the lowest supported rung when all are higher; a target without effort control offers `none`.
-
-Both stages share one `decisionTimeoutMs` deadline. A singleton effective option needs no second call; service option limits still apply without truncation. Timeout, invalid answers, or other stage-two failures retain the exact deterministic, quota-aware level backup. Caller cancellation remains cancellation. Target retries do not classify or route again.
-
-Quota never enters classification. With `decisionQuotaSignals`, routing receives all usable level options and advisory cached quota; the backup still prefers the healthiest existing tier. Stage telemetry adds `levelSelectPath`, `levelSelectGate`, and literal-true `levelSelectQuotaSent` only when evidence was actually sent. `level`/`levelPath` and classifier confidence stay unchanged; decision tokens and elapsed time cover both stages as one logical decision. Successful routing logs a quota summary only when its request carried quota; deterministic retention keeps the locally weighed summary.
-
-Omission defaults to `order`; explicit `order` or management `null` clears the stored selector. A management PUT that omits it preserves it only while the effective JEV level configuration remains valid. Switching mode or strategy clears it without making it dormant. CLI `--decision-level-select order|route|-` supports partial updates (`-` clears). The dashboard’s **Within-level selection** control is level-only; switching away and back starts in candidate-order mode, and saving order sends an explicit null. Level lists remain read-only and the Test button remains a backend probe.

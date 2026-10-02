@@ -7,6 +7,7 @@ import {
   type JevDecisionPrompt,
   type JevLevelId,
   type JevLevelPath,
+  type JevLevelSelectPath,
   type JevQuotaTier,
 } from "./jev-decision-contract";
 import {
@@ -62,8 +63,11 @@ export interface JevLevelDecision extends JevDecision {
   level?: JevLevelId;
   /** Which selection produced `targetKey` and `effort`. */
   levelPath: JevLevelPath;
-  levelSelectPath?: "route" | "order_fallback";
+  /** `levelSelect: "route"` with a usable level only: whether the routed pick replaced the order pick. */
+  levelSelectPath?: JevLevelSelectPath;
+  /** Gate of the within-level route call; `apply` exactly when `levelSelectPath` is `route`. */
   levelSelectGate?: JevDecision["gate"];
+  /** The within-level route call sent quota evidence, whether or not its answer applied. */
   levelSelectQuotaSent?: true;
   /** Candidates the selection weighed (the used level's usable ones), for the quota summary. */
   considered?: readonly JevCandidate[];
@@ -72,6 +76,7 @@ export interface JevLevelDecision extends JevDecision {
 export interface ResolveJevLevelDecisionOptions extends ResolveJevDecisionOptions {
   levels: NormalizedJevLevels;
   fallbackLevel?: JevLevelId;
+  /** Route among the selected level's options instead of taking its first usable candidate. */
   levelSelect?: "route";
   /** Prefer healthier quota tiers (each candidate's `quota`) within a level. */
   quotaAware?: boolean;
@@ -246,7 +251,7 @@ async function classifyWithModel(
 }
 
 /**
- * Classify the next call's demand level and select a target and effort for it.
+ * Classify the next call's demand level and take that level's first usable target and effort.
  *
  * Decision failures reuse the route-mode gates and the supplied first-eligible fallback
  * (`levelPath: "fail_open"`). A level with no usable candidate tries the fallback level, then
@@ -304,6 +309,15 @@ async function resolveJevLevelOrder(options: ResolveJevLevelDecisionOptions): Pr
   return { ...decided, ...options.fallback, latencyMs: elapsed(), levelPath: "fail_open" };
 }
 
+/**
+ * Classify the next call's demand level and select a target and effort for it.
+ *
+ * Without `levelSelect: "route"` this is the order selection above. With it, a usable level pick
+ * is re-chosen by routing among that level's options, both calls sharing one decision timeout;
+ * a route failure keeps the order pick (`levelSelectPath: "order_fallback"`). Classification
+ * failures and global fail-open return the order result unchanged. A caller abort is rethrown
+ * by identity.
+ */
 export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOptions): Promise<JevLevelDecision> {
   if (options.levelSelect !== "route") return resolveJevLevelOrder(options);
   if (options.signal?.aborted) throw options.signal.reason;
@@ -316,6 +330,10 @@ export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOp
   const expired = () => deadline.signal.aborted || now() - startedAt >= budget;
   const elapsed = () => Math.max(0, now() - startedAt);
   const cancelled = () => { if (options.signal?.aborted) throw options.signal.reason; };
+  const usageOf = (...stages: Array<Record<string, number> | undefined>) => {
+    const usage = aggregateJevLevelUsage(...stages);
+    return usage ? { usage } : {};
+  };
   let selected: JevLevelDecision;
   try {
     try {
@@ -329,12 +347,14 @@ export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOp
     }
     cancelled();
     if (selected.levelPath === "fail_open" || !selected.level || selected.gate !== "apply") {
-      return { ...selected, ...(expired() ? { gate: "timeout" as const, ...options.fallback } : {}), ...(aggregateJevLevelUsage(selected.usage) ? { usage: aggregateJevLevelUsage(selected.usage) } : {}), latencyMs: elapsed() };
+      // A classified level without a usable candidate keeps `apply`, exactly as order selection does.
+      const gate = selected.gate !== "apply" && expired() ? "timeout" as const : selected.gate;
+      return { ...selected, gate, ...usageOf(selected.usage), latencyMs: elapsed() };
     }
     let routeQuotaSent = false;
     const retained = (gate: JevDecisionFailureGate, routed?: JevDecision): JevLevelDecision => ({
       ...selected,
-      ...(aggregateJevLevelUsage(selected.usage, routed?.usage) ? { usage: aggregateJevLevelUsage(selected.usage, routed?.usage) } : {}),
+      ...usageOf(selected.usage, routed?.usage),
       latencyMs: elapsed(), levelSelectPath: "order_fallback", levelSelectGate: gate,
       ...(routeQuotaSent || routed?.quotaSent ? { levelSelectQuotaSent: true as const } : {}),
     });
@@ -363,7 +383,7 @@ export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOp
     if (routed.gate !== "apply") return retained(routed.gate, routed);
     return {
       ...selected, targetKey: routed.targetKey, effort: routed.effort,
-      ...(aggregateJevLevelUsage(selected.usage, routed.usage) ? { usage: aggregateJevLevelUsage(selected.usage, routed.usage) } : {}), latencyMs: elapsed(),
+      ...usageOf(selected.usage, routed.usage), latencyMs: elapsed(),
       considered: routed.quotaSent ? selected.considered : undefined,
       levelSelectPath: "route", levelSelectGate: "apply",
       ...(routed.quotaSent ? { levelSelectQuotaSent: true as const } : {}),

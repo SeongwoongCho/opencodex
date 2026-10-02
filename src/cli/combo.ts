@@ -1,4 +1,4 @@
-import { JEV_DECISION_MODES, JEV_LEVEL_IDS } from "../combos/jev-decision-contract";
+import { JEV_DECISION_MODES, JEV_LEVEL_IDS, JEV_LEVEL_SELECTS } from "../combos/jev-decision-contract";
 import { JEV_DECISION_TIMEOUT_MAX_MS, JEV_DECISION_TIMEOUT_MIN_MS } from "../combos/types";
 import {
   CliUsageError,
@@ -150,8 +150,9 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
     throw new CliUsageError(`--decision-mode must be ${JEV_DECISION_MODES.join(", ")}, or -`, USAGE);
   }
   const decisionLevelSelect = takeOption(args, "--decision-level-select");
-  if (decisionLevelSelect !== undefined && !["order", "route", "-"].includes(decisionLevelSelect)) {
-    throw new CliUsageError("--decision-level-select must be order, route, or -", USAGE);
+  if (decisionLevelSelect !== undefined && decisionLevelSelect !== "-"
+    && !(JEV_LEVEL_SELECTS as readonly string[]).includes(decisionLevelSelect)) {
+    throw new CliUsageError(`--decision-level-select must be ${JEV_LEVEL_SELECTS.join(", ")}, or -`, USAGE);
   }
   const decisionLevelsRaw = takeOption(args, "--decision-levels");
   let decisionLevels: unknown;
@@ -223,7 +224,7 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
     combo.decisionFallbackLevel = null;
   }
   if (decisionLevelSelect !== undefined) combo.decisionLevelSelect = decisionLevelSelect === "-" ? null : decisionLevelSelect;
-  else if ((decisionMode !== undefined && decisionMode !== "level") || decisionLevelsRaw === "-" || strategy !== "jev") combo.decisionLevelSelect = null;
+  else if ((decisionMode !== undefined && decisionMode !== "level") || decisionLevelsRaw === "-") combo.decisionLevelSelect = null;
   if (strategy !== "jev") {
     delete combo.decisionLevelSelect;
     delete combo.decisionProvider;
@@ -240,7 +241,7 @@ async function set(argv: string[], deps: RuntimeApiDeps): Promise<void> {
   const effectiveMode = Object.hasOwn(combo, "decisionMode") ? combo.decisionMode : existing?.decisionMode;
   const effectiveLevels = Object.hasOwn(combo, "decisionLevels") ? combo.decisionLevels : existing?.decisionLevels;
   if (decisionLevelSelect !== undefined && decisionLevelSelect !== "-"
-    && (strategy !== "jev" || effectiveMode !== "level" || effectiveLevels == null)) {
+    && (effectiveMode !== "level" || effectiveLevels == null)) {
     throw new CliUsageError("--decision-level-select requires jev level mode and configured levels", USAGE);
   }
   if (existing?.imageInput === "disabled") combo.imageInput = "disabled";

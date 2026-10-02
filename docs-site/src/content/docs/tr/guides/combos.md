@@ -412,7 +412,3 @@ reddedilen istek kaynağını düzeltin. Kombolar bu durumlar için atlama yapma
 Sonlandırıcı 400 hatalarının dar bir istisnası vardır: `user` alanını açıkça reddeden, `reasoning.effort`/`reasoning_effort` için desteklenmeyen değer bildiren veya modele özgü görüntü girdisini reddeden (`param: input`) yapılandırılmış hata, çıktı başlamadan önce sonraki uygun hedefe geçebilir. Bu uyumsuzluk için bekleme süresi kaydedilmez. Güvenlik politikası reddi, iptal ve başlamış çıktı yeniden yürütülmez.
 
 [Canonical compatibility details](/guides/combos/#request-local-target-compatibility).
-
-### `decisionLevelSelect`
-
-Geçerli JEV seviye yapılandırmasında `decisionLevelSelect: "route"` önce sınıflandırır, sonra yalnızca seçilen veya kullanılabilir yedek seviyede hedef ve çabayı dinamik seçer. İki çağrı aynı süre sınırını paylaşır; ikinci çağrı başarısızsa kotayı gözeten belirlenmiş seçim korunur. Sınıflandırmaya kota gönderilmez; yönlendirmede kota tavsiye niteliğindedir. Varsayılan `order`; `order` veya API `null` ayarı temizler. CLI: `--decision-level-select order|route|-`; `-` temizler. Seviye modundan çıkmak seçimi sıfırlar.

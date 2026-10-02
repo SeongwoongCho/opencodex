@@ -301,7 +301,3 @@ combo id 不存在。响应是 HTTP 404，类型为 `invalid_request_error`。�
 一般 400 错误仍会终止请求，但明确拒绝 `user`、对 `reasoning.effort`/`reasoning_effort` 返回不支持值，或返回模型特定图像输入拒绝（`param: input`）的结构化错误，可让 combo 在输出开始前尝试下一个符合条件的目标，而不记录冷却时间。安全策略拒绝、取消以及已经开始的输出仍不可重放。
 
 [Canonical compatibility details](/guides/combos/#request-local-target-compatibility).
-
-### `decisionLevelSelect`
-
-有效 JEV 级别配置可设置 `decisionLevelSelect: "route"`：先分类，再仅从所选级别或可用的回退级别动态选择目标和推理强度。两次调用共享截止时间，第二次失败保留配额感知的确定性备选。分类不发送配额，路由中的配额仅供参考。省略默认为 `order`；`order` 或 API `null` 清除设置。CLI 使用 `--decision-level-select order|route|-`，`-` 表示清除。离开级别模式会重置选择。

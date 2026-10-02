@@ -36,6 +36,7 @@ export type NormalizedJevLevels = Partial<Record<JevLevelId, NormalizedJevLevel>
 
 const LEVEL_ID_SET = new Set<string>(JEV_LEVEL_IDS);
 const MODE_SET = new Set<string>(JEV_DECISION_MODES);
+const LEVEL_SELECT_SET = new Set<string>(JEV_LEVEL_SELECTS);
 const MAX_DESCRIPTION_CHARS = 512;
 // U+2028/U+2029 survive JSON.stringify as raw line breaks, so they count as control text here.
 const DISALLOWED_CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u2028\u2029]/;
@@ -144,7 +145,7 @@ function levelIssues(
   return issues;
 }
 
-/** Issues for the three level-mode fields of one raw Combo body. */
+/** Issues for the four level-mode fields of one raw Combo body. */
 export function jevLevelConfigIssues(body: Record<string, unknown>, comboId = "<id>"): JevLevelConfigIssue[] {
   const issues: JevLevelConfigIssue[] = [];
   const jev = body.strategy === "jev";
@@ -210,10 +211,15 @@ export function jevLevelConfigIssues(body: Record<string, unknown>, comboId = "<
   }
   const select = body.decisionLevelSelect;
   if (select !== undefined && select !== null) {
-    if (typeof select !== "string" || !(JEV_LEVEL_SELECTS as readonly string[]).includes(select)) {
+    if (typeof select !== "string" || !LEVEL_SELECT_SET.has(select)) {
       issues.push({ path: ["decisionLevelSelect"], message: 'decisionLevelSelect must be "order" or "route"' });
-    } else if (!jev || mode !== "level" || !configured || issues.some(issue => issue.path[0] === "decisionLevels")) {
-      issues.push({ path: ["decisionLevelSelect"], message: 'decisionLevelSelect requires strategy "jev", decisionMode "level", and valid decisionLevels' });
+    } else if (!jev) {
+      issues.push({ path: ["decisionLevelSelect"], message: 'decisionLevelSelect is only valid with strategy "jev"' });
+    } else if (mode !== "level" || !configured || issues.some(issue => issue.path[0] === "decisionLevels")) {
+      issues.push({
+        path: ["decisionLevelSelect"],
+        message: 'decisionLevelSelect requires decisionMode "level" and valid decisionLevels',
+      });
     }
   }
   return issues;
@@ -234,8 +240,9 @@ function normalizedLevel(raw: OcxComboDecisionLevel, id: JevLevelId): Normalized
 }
 
 /**
- * Sparse normalized level fields. `route` (the default) is stored as omission; levels keep
- * canonical order; a fallback level equal to the default is still stored when explicit.
+ * Sparse normalized level fields. The defaults, `decisionMode: "route"` and
+ * `decisionLevelSelect: "order"`, are stored as omission; levels keep canonical order; a fallback
+ * level equal to the default is still stored when explicit.
  */
 export function normalizeJevLevelFields(raw: {
   decisionMode?: unknown;

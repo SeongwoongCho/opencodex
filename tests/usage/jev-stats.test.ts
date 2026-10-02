@@ -362,7 +362,7 @@ describe("JEV decision telemetry", () => {
   });
 });
 
- test("hierarchical stage telemetry requires a coherent bounded bundle", () => {
+test("hierarchical stage telemetry requires a coherent bounded bundle", () => {
   const old = { version: 1, comboId: "auto", selected: { provider: "a", model: "m", effort: null }, gate: "apply", latencyMs: 30, level: "hard", levelPath: "chosen" };
   const stage = { levelSelectPath: "route", levelSelectGate: "apply", levelSelectQuotaSent: true };
   expect(normalizePersistedJevDecision({ ...old, ...stage, secret: "discard" })).toEqual({ ...old, ...stage });
