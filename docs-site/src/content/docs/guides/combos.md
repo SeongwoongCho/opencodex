@@ -498,9 +498,10 @@ rows show decision count, applied count, and average latency for `typesafe`, `sy
 #### Quota-aware decisions
 
 Set `"decisionQuotaSignals": true` on a JEV Combo (dashboard: **Consider remaining account quota**;
-CLI: `--decision-quota on`) to tell the decision model how much subscription quota each target has
-left, so it steers away from nearly exhausted accounts. It is off by default, and while off the
-decision request is byte-for-byte what it was before.
+CLI: `--decision-quota on`) to steer away from nearly exhausted accounts. In route mode the decision
+backend is told how much subscription quota each target has left; in [level mode](#level-mode) the
+tiers stay local and rank that level's candidates, and no quota text is sent. It is off by default,
+and while off the decision request is byte-for-byte what it was before.
 
 - The quota comes from the cached provider quota rows that `ocx provider quota` and the dashboard
   **Providers** page show, read without any network call: for a ChatGPT/Codex account pool the pool
@@ -516,14 +517,14 @@ decision request is byte-for-byte what it was before.
   family. Other custom meters and credit balances are ignored. Rows older than 30 minutes, windows
   whose reset has passed, and targets with no data send nothing for that target.
 - Tiers: under 70% used is **healthy**, 70% to under 90% **limited**, 90% or more **nearly
-  exhausted**. A self-hosted decision service gets one short clause at the end of each option, for
+  exhausted**. In route mode, a self-hosted decision service gets one short clause at the end of each option, for
   example `Quota limited (78% of weekly used, resets in 2h).` or `QUOTA NEARLY EXHAUSTED (98% of
   weekly used, resets in 3d): choose only if no alternative is adequate.`, plus one
   `instructions.quota` line when at least one target has data. Canonical TypeSafe gets the same
   facts as a structured `quota` object (`tier`, `used_percent`, `window`, `resets_in_seconds`) on each
   criterion; that shape has not been verified against the hosted TypeSafe service. An opencodex
   decision model (`decisionModel`) sees the same clause in each option description.
-- The signal is advice to the decision model only. It never makes a target ineligible (exhausted
+- In route mode the signal is advice to the decision backend only. It never makes a target ineligible (exhausted
   targets are already skipped by the ordinary quota check), and if the extra text would push a very
   large Combo over the 64 KiB decision request limit, the decision is sent without it.
 - The JEV decision log records only how many targets were sent in each tier and the picked target's

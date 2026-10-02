@@ -157,8 +157,10 @@ With `--strategy jev` only, the decision method is chosen by one of two mutually
 Ollama `tev1`) as a System One-compatible server. `--decision-model <route|->` names an ordinary
 opencodex route (for example `ollama/qwen3:4b`) that answers the same choice as JSON; it cannot be
 this combo or any JEV combo. Omitting both uses TypeSafe. `--decision-timeout <ms|->` sets the
-decision deadline (1000–120000, default 4000); `--decision-quota <on|off|->` sends each
-target's cached remaining-quota tier with the decision. `-` clears any of these.
+decision deadline (1000–120000, default 4000); `--decision-quota <on|off|->` makes the
+combo quota-aware: in route mode each target's cached remaining-quota tier is sent with the
+decision; in level mode the tiers rank candidates locally and nothing is sent. `-` clears any of
+these.
 
 `ocx combo test [--combo <id>] [--decision-provider <provider|jev> | --decision-model <route>]
 [--decision-timeout <ms>]` sends one synthetic decision probe through a saved combo's method or an

@@ -191,8 +191,8 @@ believe `ocx capabilities --json`.
 ## JEV Combo quota signals and level mode
 
 `ocx combo set <id> --decision-quota <on|off|->` makes a JEV Combo quota-aware: cached provider quota
-tiers (never a fresh probe) ride along with route-mode options, and level mode prefers healthier
-candidates. `--decision-mode <route|level|->` switches to level mode, where the decision method only
+tiers (never a fresh probe) ride along with route-mode options, and level mode ranks candidates by
+them locally without sending any quota. `--decision-mode <route|level|->` switches to level mode, where the decision method only
 classifies the next call's demand level; `--decision-levels <json|->` sets the per-level candidate
 lists (each candidate names a Combo target and optionally an effort it allows) and
 `--decision-fallback-level <level|->` the level tried when the classified one has nothing usable.
