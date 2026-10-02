@@ -975,6 +975,7 @@
     "jev-typesafe-golden.test.ts": "routing",
     "jev-model-backend.test.ts": "routing",
     "jev-route-golden.test.ts": "routing",
+    "jev-decision-prompt.test.ts": "routing",
     "jev-quota-warmer.test.ts": "routing",
     "jev-quota-signals.test.ts": "routing",
     "jev-level-mode.test.ts": "routing",
