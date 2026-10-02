@@ -7,9 +7,11 @@ import {
   JEV_DECISION_TIMEOUT_MAX_MS,
   JEV_DECISION_TIMEOUT_MIN_MS,
   isSystemOneEndpoint,
+  type JevDecisionPrompt,
   type JevLevelId,
 } from "./jev-decision-contract";
 import { jevLevelConfigIssues, normalizeJevLevelFields, type NormalizedJevLevels } from "./jev-level-config";
+import { jevPromptConfigIssues, normalizeJevPromptFields } from "./jev-prompt-config";
 
 export const COMBO_DEFAULT_WAIT_FOR_COOLDOWN_MS = 0;
 export const JEV_MAX_CANDIDATE_FIELD_CHARS = 512;
@@ -80,8 +82,8 @@ export interface NormalizedComboConfig {
   decisionLevels?: NormalizedJevLevels;
   /** Explicit level-mode fallback level; absent means `"routine"`. */
   decisionFallbackLevel?: JevLevelId;
-  /** JEV decision wording overrides, carried through unchanged so a save never erases them. */
-  decisionPrompt?: Record<string, unknown>;
+  /** JEV decision wording overrides; only fields that differ from the built-in wording. */
+  decisionPrompt?: JevDecisionPrompt;
   targets: NormalizedComboTarget[];
 }
 
@@ -367,6 +369,7 @@ export function comboConfigIssues(
     }
   }
   issues.push(...jevLevelConfigIssues(body, id));
+  issues.push(...jevPromptConfigIssues(body));
 
   if (!Array.isArray(body.targets) || body.targets.length === 0) {
     issues.push({ path: ["targets"], message: "targets must be a non-empty array" });
@@ -514,10 +517,7 @@ export function normalizeComboConfig(raw: OcxComboConfig): NormalizedComboConfig
     ...(typeof raw.decisionTimeoutMs === "number" ? { decisionTimeoutMs: raw.decisionTimeoutMs } : {}),
     ...(raw.decisionQuotaSignals === true ? { decisionQuotaSignals: true as const } : {}),
     ...normalizeJevLevelFields(raw),
-    ...(raw.strategy === "jev" && raw.decisionPrompt && typeof raw.decisionPrompt === "object"
-      && !Array.isArray(raw.decisionPrompt)
-      ? { decisionPrompt: raw.decisionPrompt }
-      : {}),
+    ...(raw.strategy === "jev" ? normalizeJevPromptFields(raw) : {}),
     targets: raw.targets.map(target => ({
       provider: target.provider.trim(),
       model: target.model.trim(),

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { JevCandidate } from "../../src/combos/jev";
 import { resolveJevComboDecision } from "../../src/combos/jev-dispatch";
 import { JEV_LEVEL_DEFAULT_DESCRIPTIONS } from "../../src/combos/jev-decision-contract";
-import { JEV_MODEL_LEVEL_INSTRUCTIONS, resolveJevLevelDecision } from "../../src/combos/jev-level";
+import { JEV_MODEL_LEVEL_INSTRUCTIONS, jevModelLevelInstructions, resolveJevLevelDecision } from "../../src/combos/jev-level";
 import type { NormalizedJevLevels } from "../../src/combos/jev-level-config";
 import { buildJevModelPrompt, JEV_MODEL_INSTRUCTIONS, JevModelInvokeError, resolveJevModelDecision, type JevModelInvoke, type JevModelInvokeRequest } from "../../src/combos/jev-model-backend";
 import { JEV_MAX_REQUEST_BYTES } from "../../src/combos/jev";
@@ -107,6 +107,20 @@ describe("level mode through a decision model", () => {
     const small = await sent(build(20, true));
     expect(small.decision).toMatchObject({ gate: "apply", quotaSent: true });
     expect(small.calls[0]!.input).toContain("QUOTA NEARLY EXHAUSTED");
+  });
+
+  test("levelInstructions replaces only the classification sentence of the model prompt", async () => {
+    const calls: JevModelInvokeRequest[] = [];
+    await resolveJevLevelDecision({
+      body, candidates, fallback, config, levels,
+      decisionPrompt: { levelInstructions: "Rate the coding effort." },
+      decisionModel: "router/small",
+      invokeModel: invoking('{"choice":"hard"}', calls),
+    });
+    expect(calls[0]!.instructions).toBe(jevModelLevelInstructions({ levelInstructions: "Rate the coding effort." }));
+    expect(calls[0]!.instructions).toContain("Rate the coding effort.");
+    expect(calls[0]!.instructions).toContain('{"choice":"<key>"}');
+    expect(jevModelLevelInstructions()).toBe(JEV_MODEL_LEVEL_INSTRUCTIONS);
   });
 
   test("a caller abort is rethrown by identity", async () => {

@@ -3749,6 +3749,17 @@ export const en = {
   "cws.plan.description": "Asks the proxy how each target would carry a request with every feature the client API can express, and which features all targets keep. Nothing is sent upstream.",
   "cws.plan.run": "Show candidate paths",
   "cws.plan.savedOnly": "Shows the saved combo. Save your changes to preview them.",
+  "cws.jev.promptTitle": "Decision prompt",
+  "cws.jev.promptHint": "Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Changing decision wording can change routing accuracy; re-evaluate after edits. This text is sent to the decision service; do not include secrets or private paths.",
+  "cws.jev.promptReset": "Reset to default",
+  "cws.jev.promptLevel": "Level instruction",
+  "cws.jev.promptDescription": "Description: {level}",
+  "cws.jev.promptQuestion": "Question",
+  "cws.jev.promptObjective": "Objective",
+  "cws.jev.promptEvidence": "Evidence",
+  "cws.jev.promptNeutrality": "Neutrality",
+  "cws.jev.promptSpeed": "Speed",
+  "cws.jev.promptEffort": "Effort profile: {effort}",
 } as const;
 
 export type TKey = keyof typeof en;

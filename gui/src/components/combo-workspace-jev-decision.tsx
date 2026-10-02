@@ -13,6 +13,8 @@ import {
 import type { ComboDecisionLevels, JevLevelId } from "../combo-workspace-data";
 import type { ModelOption, ProviderOption } from "./combo-workspace-types";
 import { JevDecisionModeField } from "./combo-workspace-jev-levels";
+import { JevDecisionPromptFields } from "./combo-workspace-jev-prompt";
+import type { JevDecisionPrompt } from "../../../src/combos/jev-decision-contract";
 
 export type JevDecisionPatch = {
   decisionProvider?: string | null;
@@ -20,9 +22,11 @@ export type JevDecisionPatch = {
   decisionTimeoutMs?: number | null;
   decisionQuotaSignals?: boolean;
   decisionMode?: "level";
-  decisionLevels?: undefined;
+  decisionLevels?: ComboDecisionLevels;
   decisionFallbackLevel?: undefined;
   clearDecisionLevels?: true;
+  decisionPrompt?: JevDecisionPrompt;
+  decisionLevelsEdited?: true;
 };
 
 type DecisionTestResult =
@@ -57,6 +61,7 @@ export function ComboJevDecisionSection({
   decisionMode,
   decisionLevels,
   decisionFallbackLevel,
+  decisionPrompt,
   staleLevelCandidates,
   clearDecisionLevels = false,
   disabled,
@@ -76,6 +81,7 @@ export function ComboJevDecisionSection({
   decisionMode?: "level";
   decisionLevels?: ComboDecisionLevels;
   decisionFallbackLevel?: JevLevelId;
+  decisionPrompt?: JevDecisionPrompt;
   staleLevelCandidates?: readonly string[];
   clearDecisionLevels?: boolean;
   disabled?: boolean;
@@ -317,6 +323,14 @@ export function ComboJevDecisionSection({
         onClearLevels={() => onChange({ clearDecisionLevels: true, decisionLevels: undefined, decisionFallbackLevel: undefined })}
         disabled={disabled}
         onChange={(mode) => onChange({ decisionMode: mode })}
+      />
+      <JevDecisionPromptFields
+        idPrefix={idPrefix}
+        decisionMode={decisionMode}
+        decisionPrompt={decisionPrompt}
+        decisionLevels={decisionLevels}
+        disabled={disabled}
+        onChange={onChange}
       />
 
       <div className="cwi-jev-decision-test" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>

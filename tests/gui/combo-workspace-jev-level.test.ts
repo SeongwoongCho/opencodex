@@ -87,3 +87,17 @@ describe("dashboard level-mode data", () => {
     expect(draftEquals(item!, { ...item!, clearDecisionLevels: true })).toBeFalse();
   });
 });
+
+test("dashboard prompt overrides round-trip sparsely and level description edits retain candidates", () => {
+  const [item] = parseComboList({ combos: [{ ...row, decisionPrompt: { levelInstructions: " Custom level. ", route: { question: "Custom question." } } }] });
+  expect(item!.decisionPrompt).toEqual({ levelInstructions: "Custom level.", route: { question: "Custom question." } });
+  expect(toPutBody(item!).combo.decisionPrompt).toEqual(item!.decisionPrompt);
+  expect(toPutBody({ ...item!, decisionPrompt: {} }).combo.decisionPrompt).toBeNull();
+  expect(toPutBody({ ...item!, strategy: "failover" }).combo).not.toHaveProperty("decisionPrompt");
+  expect(draftEquals(item!, { ...item!, decisionPrompt: {} })).toBeFalse();
+  const levels = item!.decisionLevels!.map(entry => entry.id === "trivial" ? { ...entry, description: "New description." } : entry);
+  const edited = { ...item!, decisionLevels: levels, decisionLevelsEdited: true as const };
+  expect(draftEquals(item!, edited)).toBeFalse();
+  expect(toPutBody(edited).combo.decisionLevels).toEqual(Object.fromEntries(levels.map(({ id, ...entry }) => [id, entry])));
+  expect(toPutBody(edited).combo.decisionLevels?.trivial?.candidates).toEqual(item!.decisionLevels![0]!.candidates);
+});

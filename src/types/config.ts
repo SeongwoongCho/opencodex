@@ -1,6 +1,6 @@
 import type { OcxProviderConfig } from "./provider";
 import type { CodexAccount } from "./accounts";
-import type { JevDecisionMode, JevLevelId } from "../combos/jev-decision-contract";
+import type { JevDecisionMode, JevDecisionPrompt, JevLevelId } from "../combos/jev-decision-contract";
 
 export interface AnthropicModelRoute {
   name: string;
@@ -1388,8 +1388,12 @@ export interface OcxComboConfig {
   decisionLevels?: Partial<Record<JevLevelId, OcxComboDecisionLevel>>;
   /** Level tried when the classified level has no usable candidate; default `"routine"`. */
   decisionFallbackLevel?: JevLevelId;
-  /** JEV-only decision wording overrides, stored as given; not yet sent to the decision service. */
-  decisionPrompt?: Record<string, unknown> | null;
+  /**
+   * `strategy: "jev"` only: wording overrides for the decision question. `levelInstructions`
+   * replaces the level-mode instruction; `route` replaces route-mode instruction fields and
+   * effort profiles. Fields equal to the built-in wording are stored as omission.
+   */
+  decisionPrompt?: JevDecisionPrompt | null;
 }
 
 export interface OcxComboDecisionLevel {

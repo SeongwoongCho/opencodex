@@ -243,8 +243,8 @@ export async function handleComboRoutes(ctx: ManagementContext): Promise<Respons
         && requestedCombo.strategy === "jev"
         ? { decisionTimeoutMs: previous.decisionTimeoutMs }
         : {}),
-      // The dashboard does not edit quota signals, levels, or decision wording yet; a round-trip
-      // that omits them keeps them, while switching away from jev drops them.
+      // A round-trip that omits quota signals, decision wording, or levels keeps them; switching
+      // away from jev drops them.
       ...(!Object.hasOwn(requestedCombo, "decisionQuotaSignals")
         && previous?.decisionQuotaSignals !== undefined
         && requestedCombo.strategy === "jev"

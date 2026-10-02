@@ -582,6 +582,7 @@ export async function executeComboResponses(
       decision = await resolveJevComboDecision({
         body,
         candidates,
+        ...(combo.decisionPrompt ? { decisionPrompt: combo.decisionPrompt } : {}),
         fallback,
         ...(levels
           ? {
