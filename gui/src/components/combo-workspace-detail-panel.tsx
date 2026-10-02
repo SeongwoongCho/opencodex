@@ -102,7 +102,7 @@ export function DetailPanel({
   const dirty = !draftEquals(draft, baseline);
   const staleLevelCandidates = useMemo(() => jevStaleLevelCandidates(draft), [draft]);
   const allTargetsExhausted = comboQuotaState(draft.targets, providerQuotaStates, providerMap) === "exhausted";
-  const baselineSyncKey = JSON.stringify([baseline.id, baseline.alias, baseline.nativeAlias, baseline.displayName, baseline.strategy, baseline.stickyLimit, baseline.defaultEffort, baseline.imageInput, baseline.reasoningEffortMode, baseline.decisionProvider, baseline.decisionModel, baseline.decisionTimeoutMs, baseline.decisionQuotaSignals, baseline.decisionMode, baseline.decisionLevels, baseline.decisionFallbackLevel, baseline.clearDecisionLevels, baseline.targets.map(t => [t.provider, t.model, t.weight, t.reasoningEfforts, t.modelProfile])]);
+  const baselineSyncKey = JSON.stringify([baseline.id, baseline.alias, baseline.nativeAlias, baseline.displayName, baseline.strategy, baseline.stickyLimit, baseline.defaultEffort, baseline.imageInput, baseline.reasoningEffortMode, baseline.decisionProvider, baseline.decisionModel, baseline.decisionTimeoutMs, baseline.decisionQuotaSignals, baseline.decisionMode, baseline.decisionLevelSelect, baseline.decisionLevels, baseline.decisionFallbackLevel, baseline.clearDecisionLevels, baseline.targets.map(t => [t.provider, t.model, t.weight, t.reasoningEfforts, t.modelProfile])]);
   const effortMap = useMemo(() => {
     const map = new Map<string, string[] | undefined>();
     for (const model of models) {
@@ -168,7 +168,7 @@ export function DetailPanel({
       // The server keeps these only for JEV, so the saved baseline must not carry stale ones.
       ...(draft.strategy === "jev"
         ? {}
-        : { decisionProvider: null, decisionModel: null, decisionTimeoutMs: null, decisionQuotaSignals: false, decisionMode: undefined, decisionLevels: undefined, decisionFallbackLevel: undefined }),
+        : { decisionProvider: null, decisionModel: null, decisionTimeoutMs: null, decisionQuotaSignals: false, decisionMode: undefined, decisionLevelSelect: undefined, decisionLevels: undefined, decisionFallbackLevel: undefined }),
     };
     const renameFrom = !isCreate && trimmedId !== baseline.id ? baseline.id : undefined;
     try {
@@ -341,7 +341,7 @@ export function DetailPanel({
               <StrategySeg
                 value={draft.strategy}
                 disabled={busy}
-                onChange={(strategy) => updateDraft((d) => ({ ...d, strategy }))}
+                onChange={(strategy) => updateDraft((d) => ({ ...d, strategy, ...(strategy !== "jev" ? { decisionLevelSelect: undefined } : {}) }))}
               />
               <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
                 {t(COMBO_STRATEGY_HINT_KEYS[draft.strategy])}
@@ -365,6 +365,7 @@ export function DetailPanel({
                 decisionTimeoutMs={draft.decisionTimeoutMs ?? null}
                 decisionQuotaSignals={draft.decisionQuotaSignals === true}
                 decisionMode={draft.decisionMode}
+                decisionLevelSelect={draft.decisionLevelSelect}
                 decisionLevels={draft.decisionLevels}
                 decisionFallbackLevel={draft.decisionFallbackLevel}
                 staleLevelCandidates={staleLevelCandidates}

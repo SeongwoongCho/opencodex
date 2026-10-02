@@ -177,6 +177,7 @@ export interface ComboItem {
   decisionQuotaSignals?: boolean;
   /** `jev` only: level mode; omitted = route mode. */
   decisionMode?: "level";
+  decisionLevelSelect?: "route";
   /** `jev` only: per-level candidate lists; read-only in the dashboard, never sent back. */
   decisionLevels?: ComboDecisionLevels;
   /** `jev` only: explicit level-mode fallback level; read-only, never sent back. */
@@ -365,6 +366,7 @@ export function parseComboList(payload: unknown): ComboItem[] {
       ...(decisionTimeoutMs !== null ? { decisionTimeoutMs } : {}),
       ...(r.decisionQuotaSignals === true ? { decisionQuotaSignals: true } : {}),
       ...(r.decisionMode === "level" ? { decisionMode: "level" as const } : {}),
+      ...(r.decisionMode === "level" && r.decisionLevelSelect === "route" ? { decisionLevelSelect: "route" as const } : {}),
       ...(decisionLevels ? { decisionLevels } : {}),
       ...(typeof r.decisionFallbackLevel === "string" && (JEV_LEVEL_IDS as readonly string[]).includes(r.decisionFallbackLevel)
         ? { decisionFallbackLevel: r.decisionFallbackLevel as JevLevelId }
@@ -545,6 +547,7 @@ export function draftEquals(a: ComboItem, b: ComboItem): boolean {
       || (a.decisionTimeoutMs ?? null) !== (b.decisionTimeoutMs ?? null)
       || (a.decisionQuotaSignals === true) !== (b.decisionQuotaSignals === true)
       || (a.decisionMode ?? "route") !== (b.decisionMode ?? "route")
+      || a.decisionLevelSelect !== b.decisionLevelSelect
       || (a.clearDecisionLevels === true) !== (b.clearDecisionLevels === true)
     ))
   ) return false;
@@ -577,6 +580,7 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
     decisionTimeoutMs?: number | null;
     decisionQuotaSignals?: boolean;
     decisionMode?: "level" | null;
+    decisionLevelSelect?: "route" | null;
     decisionLevels?: null;
     decisionFallbackLevel?: null;
   };
@@ -622,6 +626,7 @@ export function toPutBody(item: ComboItem, options: { renameFrom?: string } = {}
             // Null selects route mode. Levels and the fallback level are never sent: the server
             // keeps the stored ones, which the dashboard shows but does not edit.
             decisionMode: item.decisionMode === "level" ? "level" : null,
+            decisionLevelSelect: item.decisionMode === "level" && item.decisionLevelSelect === "route" ? "route" : null,
             // The one level edit the dashboard makes: an explicit clear, offered only in route mode.
             ...(item.clearDecisionLevels && item.decisionMode !== "level"
               ? { decisionLevels: null, decisionFallbackLevel: null }
@@ -853,9 +858,9 @@ export function jevDecisionServiceOptions(
 
 /** Read-only decision-service facts for a JEV combo, or null for other strategies. */
 export function jevDecisionSummary(
-  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionModel" | "decisionTimeoutMs" | "decisionQuotaSignals" | "decisionMode">,
+  item: Pick<ComboItem, "strategy" | "decisionProvider" | "decisionModel" | "decisionTimeoutMs" | "decisionQuotaSignals" | "decisionMode" | "decisionLevelSelect">,
   providers: readonly { name: string; adapter?: string; baseUrl?: string }[],
-): { provider: string | null; model: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean; mode: "route" | "level" } | null {
+): { provider: string | null; model: string | null; baseUrl: string | null; timeoutMs: number | null; quotaSignals: boolean; mode: "route" | "level"; levelSelect: "order" | "route" } | null {
   if (item.strategy !== "jev") return null;
   const provider = normalizeDecisionProvider(item.decisionProvider);
   const row = provider === null ? undefined : providers.find(candidate => candidate.name === provider);
@@ -866,6 +871,7 @@ export function jevDecisionSummary(
     timeoutMs: item.decisionTimeoutMs ?? null,
     quotaSignals: item.decisionQuotaSignals === true,
     mode: item.decisionMode === "level" ? "level" : "route",
+    levelSelect: item.decisionMode === "level" && item.decisionLevelSelect === "route" ? "route" : "order",
   };
 }
 
