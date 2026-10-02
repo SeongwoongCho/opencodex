@@ -213,3 +213,28 @@ test("leaving the JEV strategy warns that stored levels will be discarded", asyn
   expect(warning.getAttribute("role")).toBe("alert");
   expect(warning.textContent).toContain("permanently removes");
 });
+
+test("within-level selector enables routing and mode switches clear it without editing levels", async () => {
+  const saved: ComboItem[] = [];
+  const host = await renderWorkspace([levelCombo], saved);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!.click(); });
+  await flush();
+  const selector = host.querySelector<HTMLSelectElement>("#cwi-edit-level-select")!;
+  expect(selector.value).toBe("order");
+  expect(host.querySelector('label[for="cwi-edit-level-select"]')?.textContent).toBe("Within-level selection");
+  expect(host.querySelector("#cwi-edit-level-select-hint")?.textContent).toContain("share one deadline");
+  await act(async () => { setSelect(selector, "route"); });
+  await flush();
+  expect(host.querySelector("#cwi-edit-decision-quota-hint")?.textContent).not.toContain("No quota is sent");
+  const save = host.querySelector<HTMLButtonElement>("#cwi-edit-save")!;
+  await act(async () => { save.click(); });
+  await flush();
+  expect(saved[0]?.decisionLevelSelect).toBe("route");
+  expect(saved[0]?.decisionLevels).toEqual(levelCombo.decisionLevels);
+  await act(async () => { setSelect(host.querySelector<HTMLSelectElement>("#cwi-edit-decision-mode")!, "route"); });
+  await flush();
+  expect(host.querySelector("#cwi-edit-level-select")).toBeNull();
+  await act(async () => { setSelect(host.querySelector<HTMLSelectElement>("#cwi-edit-decision-mode")!, "level"); });
+  await flush();
+  expect(host.querySelector<HTMLSelectElement>("#cwi-edit-level-select")!.value).toBe("order");
+});
