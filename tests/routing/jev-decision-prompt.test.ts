@@ -62,7 +62,7 @@ describe("JEV per-combo decision wording", () => {
     for (const decisionPrompt of [[], "bad", { unknown: "bad" }, { route: null }, { route: { unknown: "bad" } }, { route: { effortProfiles: [] } }, { route: { effortProfiles: { extreme: "bad" } } }]) {
       expect(comboConfigIssues("auto", { ...combo, decisionPrompt }, providers).length).toBeGreaterThan(0);
     }
-    for (const bad of ["", " \n ", null, 1, "x".repeat(JEV_PROMPT_MAX_FIELD_CHARS + 1), "bad\u0000", "bad\u000b", "bad\u007f"]) {
+    for (const bad of ["", " \n ", null, 1, "x".repeat(JEV_PROMPT_MAX_FIELD_CHARS + 1), "bad\u0000", "bad\u000b", "bad\u007f", "bad\u2028", "bad\u2029"]) {
       for (const decisionPrompt of [{ levelInstructions: bad }, { route: { question: bad } }, { route: { effortProfiles: { low: bad } } }]) {
         expect(comboConfigIssues("auto", { ...combo, decisionPrompt }, providers)[0]?.path[0]).toBe("decisionPrompt");
       }

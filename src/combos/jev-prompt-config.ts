@@ -5,7 +5,8 @@ import {
 } from "./jev-decision-contract";
 import type { ComboValidationIssue } from "./types";
 
-const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+// U+2028/U+2029 survive JSON.stringify as raw line breaks, so they count as control text here.
+const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u2028\u2029]/;
 const ROUTE_FIELDS = Object.keys(JEV_ROUTE_DEFAULT_INSTRUCTIONS) as Array<keyof typeof JEV_ROUTE_DEFAULT_INSTRUCTIONS>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,7 +32,7 @@ export function jevPromptConfigIssues(body: Record<string, unknown>): ComboValid
   function text(value: unknown, path: string[]) {
     if (value === undefined) return;
     if (typeof value !== "string" || !value.trim() || value.length > JEV_PROMPT_MAX_FIELD_CHARS || CONTROL_CHARS.test(value)) {
-      issues.push({ path, message: `${path.join(".")} must be a non-empty string of at most ${JEV_PROMPT_MAX_FIELD_CHARS} characters; only tab, line feed and carriage return are allowed among control characters` });
+      issues.push({ path, message: `${path.join(".")} must be a non-empty string of at most ${JEV_PROMPT_MAX_FIELD_CHARS} characters; only tab, line feed and carriage return are allowed among control and line-separator characters` });
     }
   }
   if (!object(raw, ["decisionPrompt"], ["levelInstructions", "route"])) return issues;

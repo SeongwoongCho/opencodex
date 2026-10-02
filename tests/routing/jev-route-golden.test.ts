@@ -42,7 +42,9 @@ test("route-mode decision requests are byte-identical to the pre-level-mode reco
       bodies.push(String(init.body));
       return Response.json({});
     }) as NonNullable<ResolveJevDecisionOptions["post"]>;
-    await resolveJevDecision({
+    // Unset, empty, and empty-section prompts all leave the request on the built-in wording.
+    for (const decisionPrompt of [undefined, {}, { route: { effortProfiles: {} } }]) await resolveJevDecision({
+      decisionPrompt,
       body: golden.body,
       config,
       decisionProvider,
@@ -50,7 +52,7 @@ test("route-mode decision requests are byte-identical to the pre-level-mode reco
       fallback: { targetKey: golden.candidates[0]!.key, effort: null },
       post,
     });
-    expect(bodies).toEqual([expected]);
+    expect(bodies).toEqual([expected, expected, expected]);
   }
 });
 
@@ -65,12 +67,12 @@ const levelGolden = JSON.parse(readFileSync(fixturePath("jev-level-request-golde
 test("level-mode request bytes match the level-mode recording", async () => {
   for (const [decisionProvider, expected] of Object.entries(levelGolden.requests)) {
     const bodies: string[] = [];
-    await resolveJevLevelDecision({
-      body: golden.body, config, decisionProvider,
+    for (const decisionPrompt of [undefined, {}, { route: {} }]) await resolveJevLevelDecision({
+      body: golden.body, config, decisionProvider, decisionPrompt,
       levels: levelGolden.levels, candidates: golden.candidates,
       fallback: { targetKey: golden.candidates[0]!.key, effort: null },
       post: (async (_name, _provider, _url, init) => { bodies.push(String(init.body)); return Response.json({}); }) as NonNullable<ResolveJevDecisionOptions["post"]>,
     });
-    expect(bodies).toEqual([expected]);
+    expect(bodies).toEqual([expected, expected, expected]);
   }
 });
