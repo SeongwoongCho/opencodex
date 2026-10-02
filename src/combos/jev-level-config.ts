@@ -2,6 +2,7 @@ import { isCodexReasoningEffort } from "../reasoning-effort";
 import type { OcxComboDecisionLevel, OcxComboDefaultEffort } from "../types";
 import {
   JEV_DECISION_MODES,
+  JEV_LEVEL_SELECTS,
   JEV_LEVEL_IDS,
   JEV_LEVEL_MAX_CANDIDATES,
   JEV_LEVEL_DEFAULT_DESCRIPTIONS,
@@ -207,6 +208,14 @@ export function jevLevelConfigIssues(body: Record<string, unknown>, comboId = "<
       });
     }
   }
+  const select = body.decisionLevelSelect;
+  if (select !== undefined && select !== null) {
+    if (typeof select !== "string" || !(JEV_LEVEL_SELECTS as readonly string[]).includes(select)) {
+      issues.push({ path: ["decisionLevelSelect"], message: 'decisionLevelSelect must be "order" or "route"' });
+    } else if (!jev || mode !== "level" || !configured || issues.some(issue => issue.path[0] === "decisionLevels")) {
+      issues.push({ path: ["decisionLevelSelect"], message: 'decisionLevelSelect requires strategy "jev", decisionMode "level", and valid decisionLevels' });
+    }
+  }
   return issues;
 }
 
@@ -232,7 +241,8 @@ export function normalizeJevLevelFields(raw: {
   decisionMode?: unknown;
   decisionLevels?: unknown;
   decisionFallbackLevel?: unknown;
-}): { decisionMode?: Exclude<JevDecisionMode, "route">; decisionLevels?: NormalizedJevLevels; decisionFallbackLevel?: JevLevelId } {
+  decisionLevelSelect?: unknown;
+}): { decisionMode?: Exclude<JevDecisionMode, "route">; decisionLevels?: NormalizedJevLevels; decisionFallbackLevel?: JevLevelId; decisionLevelSelect?: "route" } {
   let decisionLevels: NormalizedJevLevels | undefined;
   if (isRecord(raw.decisionLevels)) {
     decisionLevels = {};
@@ -243,6 +253,7 @@ export function normalizeJevLevelFields(raw: {
   }
   return {
     ...(raw.decisionMode === "level" ? { decisionMode: "level" as const } : {}),
+    ...(raw.decisionMode === "level" && decisionLevels && raw.decisionLevelSelect === "route" ? { decisionLevelSelect: "route" as const } : {}),
     ...(decisionLevels ? { decisionLevels } : {}),
     ...(isJevLevelId(raw.decisionFallbackLevel) ? { decisionFallbackLevel: raw.decisionFallbackLevel } : {}),
   };

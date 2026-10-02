@@ -10,6 +10,7 @@ export interface ResolveJevComboDecisionOptions extends ResolveJevDecisionOption
   /** Level mode: set only when the Combo's `decisionMode` is `"level"`. */
   levels?: NormalizedJevLevels;
   fallbackLevel?: JevLevelId;
+  levelSelect?: "route";
   /** Level mode only: prefer healthier cached quota tiers within a level. */
   quotaAware?: boolean;
 }

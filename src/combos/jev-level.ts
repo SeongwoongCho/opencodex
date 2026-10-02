@@ -18,22 +18,25 @@ import {
   jevDecisionBackendFor,
   jevDecisionTimeoutMs,
   jevUsage,
+  jevRouteOptions,
+  resolveJevDecision,
   type JevCandidate,
   type JevDecision,
   type JevDecisionFailureGate,
   type ResolveJevDecisionOptions,
 } from "./jev";
 import { configuredJevLevelIds, type NormalizedJevLevel, type NormalizedJevLevels } from "./jev-level-config";
-import { JevModelInvokeError, parseJevModelChoice, type JevModelInvoke } from "./jev-model-backend";
+import { JevModelInvokeError, parseJevModelChoice, resolveJevModelDecision, type JevModelInvoke } from "./jev-model-backend";
+import { aggregateJevLevelUsage } from "./jev-level-usage";
 
 /**
  * JEV level mode (`decisionMode: "level"`).
  *
  * The decision backend answers one small question: how demanding the next model call is, as one
  * of the Combo's configured levels. ocx then walks that level's ordered candidate list and picks
- * the first usable target and effort, deterministically and synchronously. Target profiles and
- * quota never enter the request; quota-aware selection (`decisionQuotaSignals: true`) is applied
- * here, from the same cached tiers route mode sends, so it is reliable instead of advisory.
+ * the first usable target and effort by default. The opt-in within-level route stage narrows
+ * target/effort options to that level and shares the classifier deadline. Classification stays
+ * target-free; quota ranks the deterministic backup and is advisory in the route question.
  *
  * The classifier is whichever backend the Combo selects: the System One service (canonical or a
  * self-hosted `jev-decision` row) or an opencodex-routed `decisionModel`.
@@ -53,6 +56,9 @@ export interface JevLevelDecision extends JevDecision {
   level?: JevLevelId;
   /** Which selection produced `targetKey` and `effort`. */
   levelPath: JevLevelPath;
+  levelSelectPath?: "route" | "order_fallback";
+  levelSelectGate?: JevDecision["gate"];
+  levelSelectQuotaSent?: true;
   /** Candidates the selection weighed (the used level's usable ones), for the quota summary. */
   considered?: readonly JevCandidate[];
 }
@@ -60,6 +66,7 @@ export interface JevLevelDecision extends JevDecision {
 export interface ResolveJevLevelDecisionOptions extends ResolveJevDecisionOptions {
   levels: NormalizedJevLevels;
   fallbackLevel?: JevLevelId;
+  levelSelect?: "route";
   /** Prefer healthier quota tiers (each candidate's `quota`) within a level. */
   quotaAware?: boolean;
   /** Classify through an opencodex-routed model instead of the System One service. */
@@ -117,6 +124,29 @@ function defaultEffort(candidate: JevCandidate): OcxComboDefaultEffort | null {
   return effort && isCodexReasoningEffort(effort) ? effort as OcxComboDefaultEffort : null;
 }
 
+function usableLevelEntries(level: NormalizedJevLevel | undefined, candidates: readonly JevCandidate[]) {
+  const usable: Array<{ candidate: JevCandidate; effort: OcxComboDefaultEffort | null }> = [];
+  for (const wanted of level?.candidates ?? []) {
+    const candidate = candidates.find(item => item.provider === wanted.provider && item.model === wanted.model);
+    if (!candidate || (wanted.effort !== undefined && !candidate.reasoningEfforts.includes(wanted.effort))) continue;
+    usable.push({ candidate, effort: wanted.effort ?? defaultEffort(candidate) });
+  }
+  return usable;
+}
+
+export function projectJevLevelCandidates(level: NormalizedJevLevel | undefined, candidates: readonly JevCandidate[]): JevCandidate[] {
+  const grouped = new Map<string, { candidate: JevCandidate; efforts: Set<OcxComboDefaultEffort | null> }>();
+  for (const { candidate, effort } of usableLevelEntries(level, candidates)) {
+    const group = grouped.get(candidate.key) ?? { candidate, efforts: new Set<OcxComboDefaultEffort | null>() };
+    group.efforts.add(effort);
+    grouped.set(candidate.key, group);
+  }
+  return [...grouped.values()].map(({ candidate, efforts }) => {
+    if (efforts.has(null) && efforts.size > 1) throw new Error("invalid level effort projection");
+    return { ...candidate, reasoningEfforts: [...efforts].filter((effort): effort is OcxComboDefaultEffort => effort !== null) };
+  });
+}
+
 /**
  * Pick from one level's ordered candidates. A candidate is usable when its target is among the
  * currently eligible `candidates` (cooldown, disabled, lastResort deferral, capability) and its
@@ -129,14 +159,7 @@ export function selectJevLevelCandidate(
   candidates: readonly JevCandidate[],
   quotaAware = false,
 ): { targetKey: string; effort: OcxComboDefaultEffort | null; considered: JevCandidate[] } | undefined {
-  if (!level) return undefined;
-  const usable: Array<{ candidate: JevCandidate; effort: OcxComboDefaultEffort | null }> = [];
-  for (const wanted of level.candidates) {
-    const candidate = candidates.find(item => item.provider === wanted.provider && item.model === wanted.model);
-    if (!candidate) continue;
-    if (wanted.effort !== undefined && !candidate.reasoningEfforts.includes(wanted.effort)) continue;
-    usable.push({ candidate, effort: wanted.effort ?? defaultEffort(candidate) });
-  }
+  const usable = usableLevelEntries(level, candidates);
   if (usable.length === 0) return undefined;
   let best = usable[0]!;
   if (quotaAware) {
@@ -216,7 +239,7 @@ async function classifyWithModel(
  * (`levelPath: "fail_open"`). A level with no usable candidate tries the fallback level, then
  * fails open. A caller abort is rethrown by identity.
  */
-export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOptions): Promise<JevLevelDecision> {
+async function resolveJevLevelOrder(options: ResolveJevLevelDecisionOptions): Promise<JevLevelDecision> {
   const now = options.now ?? Date.now;
   const startedAt = now();
   const elapsed = () => Math.max(0, now() - startedAt);
@@ -266,4 +289,73 @@ export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOp
     return { ...decided, targetKey: fallback.targetKey, effort: fallback.effort, considered: fallback.considered, latencyMs: elapsed(), levelPath: "fallback_level" };
   }
   return { ...decided, ...options.fallback, latencyMs: elapsed(), levelPath: "fail_open" };
+}
+
+export async function resolveJevLevelDecision(options: ResolveJevLevelDecisionOptions): Promise<JevLevelDecision> {
+  if (options.levelSelect !== "route") return resolveJevLevelOrder(options);
+  if (options.signal?.aborted) throw options.signal.reason;
+  const now = options.now ?? Date.now;
+  const startedAt = now();
+  const budget = jevDecisionTimeoutMs(options.timeoutMs);
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new DOMException("Decision deadline", "TimeoutError")), budget);
+  const signal = options.signal ? AbortSignal.any([options.signal, deadline.signal]) : deadline.signal;
+  const expired = () => deadline.signal.aborted || now() - startedAt >= budget;
+  const elapsed = () => Math.max(0, now() - startedAt);
+  const cancelled = () => { if (options.signal?.aborted) throw options.signal.reason; };
+  let selected: JevLevelDecision;
+  try {
+    try {
+      selected = await resolveJevLevelOrder({ ...options, timeoutMs: budget, signal });
+    } catch {
+      cancelled();
+      return {
+        backend: jevDecisionBackendFor(options), ...options.fallback,
+        gate: expired() ? "timeout" : "network", levelPath: "fail_open", latencyMs: elapsed(),
+      };
+    }
+    cancelled();
+    if (selected.levelPath === "fail_open" || !selected.level || selected.gate !== "apply") {
+      return { ...selected, ...(expired() ? { gate: "timeout" as const, ...options.fallback } : {}), ...(aggregateJevLevelUsage(selected.usage) ? { usage: aggregateJevLevelUsage(selected.usage) } : {}), latencyMs: elapsed() };
+    }
+    let routeQuotaSent = false;
+    const retained = (gate: JevDecisionFailureGate, routed?: JevDecision): JevLevelDecision => ({
+      ...selected,
+      ...(aggregateJevLevelUsage(selected.usage, routed?.usage) ? { usage: aggregateJevLevelUsage(selected.usage, routed?.usage) } : {}),
+      latencyMs: elapsed(), levelSelectPath: "order_fallback", levelSelectGate: gate,
+      ...(routeQuotaSent || routed?.quotaSent ? { levelSelectQuotaSent: true as const } : {}),
+    });
+    if (expired()) return retained("timeout");
+    let candidates: JevCandidate[];
+    try {
+      const id = selected.levelPath === "chosen" ? selected.level : options.fallbackLevel ?? JEV_DEFAULT_FALLBACK_LEVEL;
+      candidates = projectJevLevelCandidates(options.levels[id], options.candidates);
+      if (jevRouteOptions(candidates).length < 2) return retained("no_choices");
+    } catch {
+      return retained("invalid");
+    }
+    if (expired()) return retained("timeout");
+    let routed: JevDecision;
+    try {
+      const routeOptions = { ...options, candidates, fallback: { targetKey: selected.targetKey, effort: selected.effort }, timeoutMs: budget, signal, onQuotaSent: (sent: boolean) => { routeQuotaSent = sent; } };
+      routed = options.decisionModel?.trim()
+        ? await resolveJevModelDecision({ ...routeOptions, decisionModel: options.decisionModel.trim(), invokeModel: options.invokeModel! })
+        : await resolveJevDecision(routeOptions);
+    } catch {
+      cancelled();
+      return retained(expired() ? "timeout" : "network");
+    }
+    cancelled();
+    if (expired()) return retained("timeout", routed);
+    if (routed.gate !== "apply") return retained(routed.gate, routed);
+    return {
+      ...selected, targetKey: routed.targetKey, effort: routed.effort,
+      ...(aggregateJevLevelUsage(selected.usage, routed.usage) ? { usage: aggregateJevLevelUsage(selected.usage, routed.usage) } : {}), latencyMs: elapsed(),
+      considered: routed.quotaSent ? selected.considered : undefined,
+      levelSelectPath: "route", levelSelectGate: "apply",
+      ...(routed.quotaSent ? { levelSelectQuotaSent: true as const } : {}),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }

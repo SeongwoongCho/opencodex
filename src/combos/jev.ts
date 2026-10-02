@@ -146,6 +146,7 @@ export interface ResolveJevDecisionOptions {
   signal?: AbortSignal;
   post?: typeof providerOutboundPost;
   now?: () => number;
+  onQuotaSent?: (sent: boolean) => void;
 }
 
 interface JevRouteOption {
@@ -887,6 +888,7 @@ export async function resolveJevDecision(options: ResolveJevDecisionOptions): Pr
     const full = serialize(options.candidates);
     if (fitsJevRequestBytes(full)) {
       quotaSent = withQuota;
+      options.onQuotaSent?.(withQuota);
       return { body: full };
     }
     if (!withQuota) return "invalid";

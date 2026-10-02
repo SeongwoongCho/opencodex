@@ -586,6 +586,7 @@ export async function executeComboResponses(
         ...(levels
           ? {
             levels,
+            ...(combo.decisionLevelSelect === "route" ? { levelSelect: "route" as const } : {}),
             ...(combo.decisionFallbackLevel ? { fallbackLevel: combo.decisionFallbackLevel } : {}),
             quotaAware: combo.decisionQuotaSignals === true,
           }
@@ -622,7 +623,11 @@ export async function executeComboResponses(
     // In level mode every path above, the catch included, produced a level decision.
     const levelDecision = levels ? decision as JevLevelDecision : undefined;
     const levelFields = levelDecision
-      ? { ...(levelDecision.level ? { level: levelDecision.level } : {}), levelPath: levelDecision.levelPath }
+      ? {
+        ...(levelDecision.level ? { level: levelDecision.level } : {}), levelPath: levelDecision.levelPath,
+        ...(levelDecision.levelSelectPath ? { levelSelectPath: levelDecision.levelSelectPath, levelSelectGate: levelDecision.levelSelectGate } : {}),
+        ...(levelDecision.levelSelectQuotaSent ? { levelSelectQuotaSent: true } : {}),
+      }
       : {};
     // Only what the decision request carried (route) or the selection weighed (level) is logged.
     const quotaSummary = levelDecision
