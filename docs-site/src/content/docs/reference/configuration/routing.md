@@ -286,6 +286,9 @@ decision method; a `decisionModel` answers one level key as JSON `{"choice":"<le
 
 See [Level mode](/guides/combos/#level-mode).
 
+`decisionLevelSelect: "route"` (level mode only) classifies first, then lets the decision
+backend pick a target and effort inside the selected or fallback level. See [Within-level routing](/guides/combos/#within-level-routing).
+
 ## Routing policy profiles (`config.routingProfiles`)
 
 Routing policy profiles are the Router Intelligence selection layer: an explicitly requested
@@ -433,14 +436,3 @@ The history index is disposable - deleting `routing-history.sqlite` triggers
 an automatic rebuild from `usage.jsonl` on the next query; `ocx logs
 rebuild-index` forces one. Nothing in this system auto-tunes weights,
 budgets, or candidate sets.
-
-
-### Within-level routing
-
-Set `decisionLevelSelect: "route"` with `strategy: "jev"`, `decisionMode: "level"`, and valid `decisionLevels` to classify first, then let the same decision backend choose a target **and effort** from the usable selected level. If the classified level has no usable candidate, stage two uses only the usable fallback level. It never mixes levels or exposes target-wide extra efforts. An omitted effort permits only the normal default: medium, the highest supported rung below medium, or the lowest supported rung when all are higher; a target without effort control offers `none`.
-
-Both stages share one `decisionTimeoutMs` deadline. A singleton effective option needs no second call; service option limits still apply without truncation. Timeout, invalid answers, or other stage-two failures retain the exact deterministic, quota-aware level backup. Caller cancellation remains cancellation. Target retries do not classify or route again.
-
-Quota never enters classification. With `decisionQuotaSignals`, routing receives all usable level options and advisory cached quota; the backup still prefers the healthiest existing tier. Stage telemetry adds `levelSelectPath`, `levelSelectGate`, and literal-true `levelSelectQuotaSent` only when evidence was actually sent. `level`/`levelPath` and classifier confidence stay unchanged; decision tokens and elapsed time cover both stages as one logical decision. Successful routing logs a quota summary only when its request carried quota; deterministic retention keeps the locally weighed summary.
-
-Omission defaults to `order`; explicit `order` or management `null` clears the stored selector. A management PUT that omits it preserves it only while the effective JEV level configuration remains valid. Switching mode or strategy clears it without making it dormant. CLI `--decision-level-select order|route|-` supports partial updates (`-` clears). The dashboard’s **Within-level selection** control is level-only; switching away and back starts in candidate-order mode, and saving order sends an explicit null. Level lists remain read-only and the Test button remains a backend probe.

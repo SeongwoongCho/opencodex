@@ -2991,7 +2991,7 @@ export const ja: Record<TKey, string> = {
   "cws.jev.decisionMode": "決定モード",
   "cws.jev.decisionModeRoute": "ルート: ターゲットと推論量",
   "cws.jev.decisionModeLevel": "レベル: 難易度レベル、次に候補リスト",
-  "cws.jev.decisionModeHint": "ルートモードは決定サービスにターゲットと推論量を尋ねます。レベルモードは次の呼び出しの難しさだけを尋ね、そのレベルで最初に使える候補を選びます。 任意のレベル内ルーティングでは動的に選択できます。",
+  "cws.jev.decisionModeHint": "ルートモードは決定サービスにターゲットと推論量を尋ねます。レベルモードは次の呼び出しの難しさだけを尋ね、そのレベルで最初に使える候補を選びます。任意のレベル内ルーティングでは動的に選択できます。",
   "cws.jev.levelSelect": "レベル内の選択",
   "cws.jev.levelSelectOrder": "候補の順序",
   "cws.jev.levelSelectRoute": "ターゲットと推論量をルーティング",

@@ -159,7 +159,8 @@ opencodex route (for example `ollama/qwen3:4b`) that answers the same choice as 
 this combo or any JEV combo. Omitting both uses TypeSafe. `--decision-timeout <ms|->` sets the
 decision deadline (1000–120000, default 4000); `--decision-quota <on|off|->` makes the
 combo quota-aware: in route mode each target's cached remaining-quota tier is sent with the
-decision; in level mode the tiers rank candidates locally and nothing is sent. `-` clears any of
+decision; in level mode, default `order` selection ranks candidates locally and sends nothing, while
+within-level routing sends advisory quota. `-` clears any of
 these.
 
 `ocx combo test [--combo <id>] [--decision-provider <provider|jev> | --decision-model <route>]
@@ -182,6 +183,12 @@ ocx combo set tev-auto --strategy jev --decision-provider ollama-tev1 --decision
   --targets openai/gpt-6-luna,anthropic/claude-opus-5-5 \
   --decision-levels '{"routine":{"candidates":[{"provider":"openai","model":"gpt-6-luna","effort":"max"}]},"hard":{"candidates":[{"provider":"anthropic","model":"claude-opus-5-5","effort":"xhigh"}]}}'
 ```
+
+`--decision-level-select <order|route|->` controls within-level selection. Both `order` and `route`
+require level mode with valid `--decision-levels`; `route` makes a second target/effort decision
+inside the usable selected or fallback level, sharing the classifier deadline. Omission preserves
+the stored selector; only `-` clears it unconditionally, and leaving level mode clears it.
+See [Within-level routing](/guides/combos/#within-level-routing).
 
 `--targets` sets no per-target `reasoningEfforts`, so any valid candidate effort is accepted on save;
 at request time a candidate whose target no longer advertises that effort is skipped. See
@@ -507,5 +514,3 @@ backup can restore the configuration; store exported files as secrets.
 `ocx usage` reads the connected hub with this client's enrolled data key. Human output identifies the hub source and client-key scope; `--json` returns the same scoped data. Range, surface, provider/model filters and custom `--since`/`--until` bounds remain available. Account breakdowns and other clients' records are not shared. An old or unavailable hub produces an explicit error instead of substituting local usage; upgrade the hub if it does not support this read.
 
 The read-only data-plane endpoint is `GET /v1/usage`, using `x-opencodex-api-key` with a configured client key. Environment-wide and admin keys are refused. It accepts `range`, `surface`, `provider`, `model`, `since`, and `until`; unknown/repeated options and caller-selected key IDs are rejected. Oversized skipped rows retain the explicit incomplete-history warning.
-
-`ocx combo set <id> --decision-level-select order|route|-` controls within-level selection. `route` requires an effective JEV level configuration and makes a second target/effort decision within the usable selected or fallback level, sharing the classifier deadline. Omission preserves an existing selector in a partial update; `order` or `-` clears it. Leaving level mode clears it. Failure retains the deterministic quota-aware backup; quota is advisory in the second call.

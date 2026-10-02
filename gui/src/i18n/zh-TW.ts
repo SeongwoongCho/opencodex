@@ -2180,7 +2180,7 @@ export const zhTW: Record<TKey, string> = {
   "cws.jev.decisionMode": "決策模式",
   "cws.jev.decisionModeRoute": "路由：目標與推理強度",
   "cws.jev.decisionModeLevel": "等級：難度等級，然後候選清單",
-  "cws.jev.decisionModeHint": "路由模式向決策服務詢問目標和推理強度。等級模式只詢問下一次呼叫有多難，然後選擇該等級中第一個可用的候選。 可選的等級內路由可動態選擇目標與推理強度。",
+  "cws.jev.decisionModeHint": "路由模式向決策服務詢問目標和推理強度。等級模式只詢問下一次呼叫有多難，然後選擇該等級中第一個可用的候選。可選的等級內路由可動態選擇目標與推理強度。",
   "cws.jev.levelSelect": "等級內選擇",
   "cws.jev.levelSelectOrder": "候選順序",
   "cws.jev.levelSelectRoute": "路由目標與推理強度",

@@ -204,7 +204,7 @@ export function AddComboModal({
               decisionTimeoutMs={draft.decisionTimeoutMs ?? null}
               decisionQuotaSignals={draft.decisionQuotaSignals === true}
               decisionMode={draft.decisionMode}
-                decisionLevelSelect={draft.decisionLevelSelect}
+              decisionLevelSelect={draft.decisionLevelSelect}
               decisionLevels={draft.decisionLevels}
               decisionFallbackLevel={draft.decisionFallbackLevel}
               disabled={busy}

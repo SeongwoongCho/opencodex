@@ -117,6 +117,12 @@ async function renderWorkspace(combos: ComboItem[], saved: ComboItem[]) {
   return host;
 }
 
+test("a routed level-mode combo names within-level routing on its overview chip", async () => {
+  const host = await renderWorkspace([{ ...levelCombo, decisionLevelSelect: "route" }], []);
+  const row = host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!;
+  expect(row.querySelector('[data-decision-mode="level"]')?.textContent).toBe("Level mode · Route target and effort");
+});
+
 test("a level-mode combo shows its mode, a read-only level summary, and the fallback level", async () => {
   const host = await renderWorkspace([levelCombo], []);
   const row = host.querySelector<HTMLButtonElement>('[data-decision-provider="tev-local"]')!;
