@@ -74,8 +74,11 @@ export async function resolveJevModelDecision(
 ): Promise<JevDecision> {
   const now = options.now ?? Date.now;
   const startedAt = now();
-  const failed = (gate: Exclude<JevDecision["gate"], "apply">): JevDecision =>
-    fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt), "model");
+  let quotaSent = false;
+  const failed = (gate: Exclude<JevDecision["gate"], "apply">): JevDecision => ({
+    ...fallbackDecision(options.fallback, gate, Math.max(0, now() - startedAt), "model"),
+    ...(quotaSent ? { quotaSent: true as const } : {}),
+  });
 
   if (options.signal?.aborted) throw options.signal.reason;
   if (options.candidates.length === 0) return failed("no_choices");
@@ -99,6 +102,7 @@ export async function resolveJevModelDecision(
   const timeoutSignal = AbortSignal.timeout(jevDecisionTimeoutMs(options.timeoutMs));
   const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
   try {
+    quotaSent = options.candidates.some(candidate => candidate.quota !== undefined);
     const result = await options.invokeModel({ model: options.decisionModel, instructions: JEV_MODEL_INSTRUCTIONS, input, signal });
     if (options.signal?.aborted) throw options.signal.reason;
     if (timeoutSignal.aborted) return failed("timeout");
@@ -118,6 +122,7 @@ export async function resolveJevModelDecision(
       gate: "apply",
       latencyMs: Math.max(0, now() - startedAt),
       ...(usage ? { usage } : {}),
+      ...(quotaSent ? { quotaSent: true as const } : {}),
     };
   } catch (error) {
     if (options.signal?.aborted) throw options.signal.reason;
