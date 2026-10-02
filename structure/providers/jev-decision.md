@@ -65,6 +65,17 @@ quota-aware; `src/combos/jev-level-config.ts` validates and sparsely normalizes 
 `decisionLevels`, and `decisionFallbackLevel`. `resolveJevComboDecision` enters level mode before
 the route-backend split; level request bytes are pinned by `tests/fixtures/jev-level-request-golden.json`.
 
+Decision wording. `decisionPrompt` holds optional `levelInstructions` and
+`route.{question,objective,evidence,neutrality,speed,effortProfiles.<effort>}`.
+`src/combos/jev-prompt-config.ts` validates it (JEV only, known keys only, trimmed non-empty text of
+at most 512 characters, no control characters except tab/LF/CR, no U+2028/U+2029), and
+`normalizeJevPromptFields` in the contract trims each field and drops values equal to the built-in
+defaults (`JEV_LEVEL_INSTRUCTIONS`, `JEV_ROUTE_DEFAULT_INSTRUCTIONS`, `JEV_EFFORT_DEFAULT_PROFILES`), so
+an unset or default prompt keeps the golden request bytes. `resolveJevComboDecision` passes it to every
+backend: the System One / TypeSafe route question uses the `route` fields, the System One level
+question and the `decisionModel` level prompt use `levelInstructions`, and the `decisionModel` route
+prompt keeps its fixed JSON-chooser instructions.
+
 `src/combos/jev.ts` extracts bounded user-task, previous-assistant, and latest-tool-output text plus
 the tool name and boolean signals; raw image data, tool arguments, encrypted reasoning, headers, and
 the JEV credential are excluded. It owns the joint target/effort choice map, strict response

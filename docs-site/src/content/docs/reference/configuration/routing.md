@@ -294,8 +294,9 @@ objective?: string; evidence?: string; neutrality?: string; speed?: string;
 effortProfiles?: Partial<Record<"low" | "medium" | "high" | "xhigh" | "max" | "ultra", string>> } }`.
 Level descriptions remain in `decisionLevels.<id>.description`. Empty objects and omitted fields
 keep defaults; present strings are trimmed, non-empty, bounded to 512 characters, and permit only
-tab/LF/CR control characters (U+2028 and U+2029 are rejected). With `decisionModel`, only
-`levelInstructions` reaches the model. Management omission preserves overrides while JEV remains selected;
+tab/LF/CR control characters (U+2028 and U+2029 are rejected). With `decisionModel`,
+`levelInstructions` replaces the classification sentence of the level-mode prompt; the route-mode
+prompt keeps its fixed JSON-chooser instructions, so `route` fields do not reach the model. Management omission preserves overrides while JEV remains selected;
 null clears them. The dashboard shows effective text and per-field reset controls.
 
 Level descriptions have the most influence; instruction text has little effect on tev1-class decision models. Re-evaluate after edits. In route mode, the option strings (criteria) similarly drive decisions more than instruction wording.

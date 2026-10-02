@@ -210,8 +210,9 @@ effort profiles are keyed by `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`
 `--decision-levels`, omission preserves the stored value and `-` clears it. An object replaces all
 prompt overrides; empty objects use built-in defaults. Level descriptions remain in
 `decisionLevels.<id>.description` via `--decision-levels`. Text is trimmed, non-empty when present,
-at most 512 characters, and permits only tab/LF/CR controls. With `decisionModel`, only
-`levelInstructions` reaches the model. Changing decision wording can change routing accuracy;
+at most 512 characters, and permits only tab/LF/CR controls. With `decisionModel`,
+`levelInstructions` applies only to level-mode classification; route mode keeps its fixed
+JSON-chooser instructions, so `route` fields do not reach the model. Changing decision wording can change routing accuracy;
 re-evaluate after edits. These strings go to the decision service: never include secrets or private
 paths. Dashboard Config → Decision prompt shows effective text and per-field resets without changing
 candidates.
